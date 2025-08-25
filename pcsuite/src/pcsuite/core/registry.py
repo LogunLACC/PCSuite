@@ -1,0 +1,1 @@
+# Safe winreg wrappers (stub)
