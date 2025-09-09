@@ -1,0 +1,44 @@
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+jobs:
+  build-and-publish:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install build deps
+        run: |
+          python -m pip install -U pip build twine
+
+      - name: Run tests
+        shell: powershell
+        run: |
+          $env:PYTHONPATH = (Resolve-Path 'pcsuite/src').Path
+          python -m pytest -q
+
+      - name: Build distribution
+        working-directory: pcsuite
+        run: |
+          python -m build
+
+      - name: Twine check
+        run: |
+          python -m twine check pcsuite/dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          packages-dir: pcsuite/dist
+          password: ${{ secrets.PYPI_API_TOKEN }}
+

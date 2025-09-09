@@ -1,0 +1,7 @@
+paths:
+  # System assemblies and critical stores (extra safety)
+  - "**/Windows/WinSxS/**"
+  - "**/Windows/System32/**"
+  # Do not touch browser profiles DBs (not targeted by our globs, but belt-and-suspenders)
+  - "**/Mozilla/Firefox/Profiles/**/places.sqlite*"
+  - "**/User Data/**/History*"

@@ -1,0 +1,1 @@
+# Test: registry safety (stub)

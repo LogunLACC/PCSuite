@@ -1,0 +1,1 @@
+# Recycle bin cleaner (stub)
