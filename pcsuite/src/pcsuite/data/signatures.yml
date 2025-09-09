@@ -1,1 +1,36 @@
-# Paths/patterns to clean
+categories:
+  temp:
+    globs:
+      - "%TEMP%/*"
+      - "%LOCALAPPDATA%/Temp/*"
+      - "%WINDIR%/Temp/*"
+
+  browser:
+    globs:
+      # Chrome/Chromium-based
+      - "%LOCALAPPDATA%/Google/Chrome/User Data/Default/Cache/*"
+      - "%LOCALAPPDATA%/Google/Chrome/User Data/Default/Code Cache/js/*"
+      - "%LOCALAPPDATA%/Google/Chrome/User Data/Default/GPUCache/*"
+      - "%LOCALAPPDATA%/Microsoft/Edge/User Data/Default/Cache/*"
+      - "%LOCALAPPDATA%/Microsoft/Edge/User Data/Default/Code Cache/js/*"
+      - "%LOCALAPPDATA%/Microsoft/Edge/User Data/Default/GPUCache/*"
+      - "%LOCALAPPDATA%/BraveSoftware/Brave-Browser/User Data/Default/Cache/*"
+      # Firefox
+      - "%APPDATA%/Mozilla/Firefox/Profiles/*/cache2/entries/*"
+
+  dumps:
+    globs:
+      - "%LOCALAPPDATA%/CrashDumps/*.dmp"
+      - "%LOCALAPPDATA%/CrashDumps/*.mdmp"
+      - "%SystemRoot%/Minidump/*.dmp"
+      - "%SystemRoot%/MEMORY.DMP"
+      - "%LOCALAPPDATA%/Microsoft/Windows/WER/ReportArchive/*/*.*"
+      - "%LOCALAPPDATA%/Microsoft/Windows/WER/ReportQueue/*/*.*"
+
+  do:
+    globs:
+      - "%PROGRAMDATA%/Microsoft/Windows/DeliveryOptimization/Cache/*"
+
+  recycle:
+    globs:
+      - "%SystemDrive%/$Recycle.Bin/*/*"

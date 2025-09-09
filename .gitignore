@@ -111,3 +111,8 @@ venv.bak/
 *.swp
 *.swo
 *.orig
+
+# Project outputs
+reports/
+.ruff_cache/
+*.log

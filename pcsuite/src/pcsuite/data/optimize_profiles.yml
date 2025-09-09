@@ -1,1 +1,25 @@
-# Optimization profiles
+default:
+  description: "Safe UI tweaks (per-user)"
+  steps:
+    - action: reg_set
+      root: HKCU
+      key: "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced"
+      name: HideFileExt
+      type: REG_DWORD
+      value: 0
+    - action: reg_set
+      root: HKCU
+      key: "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\Advanced"
+      name: ShowCompColor
+      type: REG_DWORD
+      value: 1
+
+light_performance:
+  description: "Light performance profile (visual effects)"
+  steps:
+    - action: reg_set
+      root: HKCU
+      key: "Software\\Microsoft\\Windows\\CurrentVersion\\Explorer\\VisualEffects"
+      name: VisualFXSetting
+      type: REG_DWORD
+      value: 2
