@@ -23,6 +23,11 @@ jobs:
         run: |
           python -m pip install -U pip build twine
 
+      - name: Install project deps
+        run: |
+          pip install -e pcsuite
+          pip install pytest
+
       - name: Run tests
         shell: powershell
         run: |
