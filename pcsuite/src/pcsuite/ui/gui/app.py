@@ -145,17 +145,16 @@ class PCSuiteGUI(tk.Tk):
 
         threading.Thread(target=task, daemon=True).start()
 
-    def _run_cli(self, args: str):
-        py = sys.executable
-        cmd = f'"{py}" -m pcsuite.cli.main {args}'
-        return core_shell.cmdline(cmd)
+    def _run_cli(self, args: list[str]):
+        # Run the CLI module via the current Python interpreter directly (no shell)
+        return core_shell.run([sys.executable, "-m", "pcsuite.cli.main", *args])
 
     def on_sys_info(self) -> None:
         self.sys_output.delete("1.0", tk.END)
         self._append_sys("Loading system info ...")
 
         def task():
-            code, out, err = self._run_cli("system info")
+            code, out, err = self._run_cli(["system", "info"])
             if code == 0:
                 self._append_sys(out.strip())
             else:
@@ -168,7 +167,7 @@ class PCSuiteGUI(tk.Tk):
         self._append_sys("Loading drives ...")
 
         def task():
-            code, out, err = self._run_cli("system drives")
+            code, out, err = self._run_cli(["system", "drives"])
             if code == 0:
                 self._append_sys(out.strip())
             else:
@@ -181,7 +180,7 @@ class PCSuiteGUI(tk.Tk):
         self._append_sec("Running security audit ...")
 
         def task():
-            code, out, err = self._run_cli("security audit")
+            code, out, err = self._run_cli(["security", "audit"])
             if code == 0:
                 self._append_sec(out.strip())
             else:
@@ -194,7 +193,7 @@ class PCSuiteGUI(tk.Tk):
         self._append_sec("Listing ports ...")
 
         def task():
-            code, out, err = self._run_cli("security ports --limit 50")
+            code, out, err = self._run_cli(["security", "ports", "--limit", "50"])
             if code == 0:
                 self._append_sec(out.strip())
             else:
@@ -206,7 +205,7 @@ class PCSuiteGUI(tk.Tk):
         self._append_sec("Starting Defender quick scan ...")
 
         def task():
-            code, out, err = self._run_cli("security defender-scan")
+            code, out, err = self._run_cli(["security", "defender-scan"])
             if code == 0:
                 self._append_sec(out.strip() or "Scan command sent")
             else:
@@ -218,11 +217,11 @@ class PCSuiteGUI(tk.Tk):
         self._append_sec(f"Harden minimal (apply={apply}) ...")
 
         def task():
-            args = "security harden --profile minimal"
+            args = ["security", "harden", "--profile", "minimal"]
             if apply:
-                args += " --apply --yes"
+                args += ["--apply", "--yes"]
                 if self.restart_explorer_var.get():
-                    args += " --restart-explorer"
+                    args += ["--restart-explorer"]
             code, out, err = self._run_cli(args)
             if code == 0:
                 self._append_sec(out.strip())
