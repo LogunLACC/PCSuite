@@ -8,6 +8,8 @@ on:
 jobs:
   build-and-publish:
     runs-on: windows-latest
+    permissions:
+      id-token: write  # Required for PyPI Trusted Publishing (OIDC)
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -36,9 +38,8 @@ jobs:
         run: |
           python -m twine check pcsuite/dist/*
 
-      - name: Publish to PyPI
+      - name: Publish to PyPI (OIDC)
         uses: pypa/gh-action-pypi-publish@release/v1
         with:
           packages-dir: pcsuite/dist
-          password: ${{ secrets.PYPI_API_TOKEN }}
 

@@ -1,6 +1,6 @@
 import typer
 from rich.console import Console
-from pcsuite.cli import clean, startup, services, tasks, optimize, security, schedule, process, drivers, registry
+from pcsuite.cli import clean, startup, services, tasks, optimize, security, schedule, process, drivers, registry, system, ui
 
 app = typer.Typer(add_completion=False)
 console = Console()
@@ -15,6 +15,8 @@ app.add_typer(schedule.app, name="schedule")
 app.add_typer(process.app, name="process")
 app.add_typer(drivers.app, name="drivers")
 app.add_typer(registry.app, name="registry")
+app.add_typer(system.app, name="system")
+app.add_typer(ui.app, name="ui")
 
 if __name__ == "__main__":
 	app()
