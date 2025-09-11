@@ -1,5 +1,6 @@
 import typer
 from rich.console import Console
+import sys
 from pcsuite.core import shell
 
 app = typer.Typer(help="Simple wrappers for scheduling (schtasks)")
@@ -27,7 +28,14 @@ def create(
     - when: Trigger, e.g., DAILY or ONLOGON
     - command: Command to execute (quoted)
     """
-    sch = f'schtasks /create /tn "{name}" /sc {when} /tr "{command}" /rl HIGHEST /f'
+    # Sanitize and robustly wrap the command for schtasks
+    cmd_str = " ".join((command or "").splitlines()).strip()
+    # If the user passed just `pcsuite ...`, ensure proper parsing by cmd.exe
+    # and avoid schtasks treating tokens as its own switches.
+    # Double quotes for inner exe/command within outer quotes (schtasks expects doubled quotes)
+    inner = cmd_str.replace('"', '""')
+    tr_value = f'cmd /c ""{inner}""'
+    sch = f'schtasks /create /tn "{name}" /sc {when} /tr "{tr_value}" /rl HIGHEST /f'
     if dry_run:
         console.print(f"[yellow]Dry-run:[/] {sch}")
         return
