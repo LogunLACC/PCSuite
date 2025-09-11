@@ -9,6 +9,8 @@ A modular PC cleaner and optimizer suite for Windows.
 - Startup and service management
 - Security and optimization tools
 - Rich CLI and TUI
+ - Firewall status/toggle, Defender scan, file reputation check
+ - Network stack and power plan tuning (what-if/apply)
 
 ## Structure
 See the `pcsuite/src/pcsuite/` directory for modules.
@@ -119,6 +121,20 @@ pcsuite schedule delete --name \MyTasks\PCSuiteCleanup --dry-run
 pcsuite optimize list-profiles
 pcsuite optimize apply default --dry-run
 pcsuite optimize apply default --yes
+
+- Network stack tuning (what-if/apply):
+
+```
+pcsuite optimize net            # show recommended TCP settings
+pcsuite optimize net --apply    # apply via netsh
+```
+
+- Power plan switching:
+
+```
+pcsuite optimize power-plan --profile high        # dry-run prints command
+pcsuite optimize power-plan --profile high --apply
+```
 ```
 
 ## Command Reference
@@ -171,6 +187,8 @@ pcsuite optimize apply default --yes
   - Harden minimal (what-if): `pcsuite security harden --profile minimal`
   - Harden minimal (apply): `pcsuite security harden --profile minimal --apply --yes`
   - With Explorer restart prompt (minimal): `pcsuite security harden --profile minimal --apply --restart-explorer`
+  - Firewall status/toggle: `pcsuite security firewall [--enable/--no-enable] [--dry-run]`
+  - File reputation: `pcsuite security reputation <path>`
 
 ## Convenience Scripts (PowerShell)
 - Preview: `./pcsuite/scripts/preview.ps1 -Category "temp,browser"`

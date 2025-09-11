@@ -4,6 +4,8 @@ from rich.console import Console
 from rich.table import Table
 import psutil
 from pcsuite.core import shell, elevation
+from pcsuite.security import firewall as fw
+from pcsuite.security import reputation as rep
 
 app = typer.Typer(help="Security checks and tools")
 console = Console()
@@ -148,6 +150,42 @@ def defender_scan(quick: bool = typer.Option(True, help="Quick scan (default)"))
         console.print("[green]Defender scan started[/]")
     else:
         console.print(f"[red]Failed to start scan:[/] {err or out}")
+
+
+@app.command("firewall")
+def firewall(
+    enable: bool | None = typer.Option(None, help="Enable or disable all profiles. If omitted, show status."),
+    dry_run: bool = typer.Option(True, help="Simulate changes when enabling/disabling"),
+):
+    """Show or toggle Windows Firewall across profiles (netsh-backed)."""
+    if enable is None:
+        states = fw.get_profile_states()
+        table = Table(title="Firewall Profiles")
+        table.add_column("Profile"); table.add_column("State")
+        for k in ("Domain", "Private", "Public"):
+            table.add_row(k, states.get(k, "unknown"))
+        console.print(table)
+        return
+    res = fw.set_all_profiles(enable=enable, dry_run=dry_run)
+    if res.get("ok") and res.get("dry_run"):
+        console.print(f"[yellow]Dry-run:[/] {res.get('cmd')}")
+    elif res.get("ok"):
+        console.print("[green]Firewall updated for all profiles[/]")
+    else:
+        console.print(f"[red]Failed:[/] {res.get('error','unknown error')}")
+
+
+@app.command("reputation")
+def file_reputation(path: str):
+    """Check file reputation indicators (signature and Zone.Identifier)."""
+    info = rep.check_reputation(path)
+    table = Table(title="File Reputation")
+    table.add_column("Field"); table.add_column("Value")
+    table.add_row("Path", path)
+    table.add_row("Signature", str(info.get("signature")))
+    zone = str(info.get("zone_id")) if info.get("has_zone") else "none"
+    table.add_row("ZoneId", zone)
+    console.print(table)
 
 
 def _pwsh_json(cmd: str):

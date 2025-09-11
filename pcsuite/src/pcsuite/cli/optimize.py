@@ -6,6 +6,8 @@ from pathlib import Path
 import winreg
 import datetime
 import json
+from pcsuite.optimize import network_stack as netopt
+from pcsuite.optimize import power as poweropt
 
 app = typer.Typer(help="Optimization profiles (list/apply with dry-run)")
 console = Console()
@@ -96,3 +98,45 @@ def apply(
     with open(report_path, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     console.print(f"Applied profile '{profile}'. Report: {report_path}")
+
+
+@app.command("net")
+def optimize_network(
+    apply: bool = typer.Option(False, help="Apply recommended TCP settings"),
+):
+    """Show and optionally apply recommended TCP stack tuning (netsh)."""
+    cur = netopt.current_settings()
+    recs = netopt.recommend(cur)
+    table = Table(title="Network Stack Recommendations")
+    table.add_column("Setting"); table.add_column("Current"); table.add_column("Target")
+    for r in recs:
+        table.add_row(r["key"], r.get("current", ""), r.get("target", ""))
+    console.print(table)
+    if not apply:
+        console.print("[yellow]What-if mode[/]: use --apply to enforce.")
+        return
+    res = netopt.apply(recs, dry_run=False)
+    if res.get("ok"):
+        console.print("[green]Applied TCP settings[/]")
+    else:
+        console.print("[red]Failed to apply some settings[/]")
+
+
+@app.command("power-plan")
+def power_plan(
+    profile: str = typer.Option("balanced", help="balanced|high|ultimate|power saver"),
+    apply: bool = typer.Option(False, help="Apply selected power plan (default prints what would run)"),
+):
+    """Switch Windows power plan by name (safe, dry by default)."""
+    cur_guid, cur_name = poweropt.current_scheme()
+    table = Table(title="Power Plan")
+    table.add_column("Current"); table.add_column("GUID")
+    table.add_row(cur_name or "?", cur_guid or "?")
+    console.print(table)
+    res = poweropt.set_scheme_by_name(profile, dry_run=not apply)
+    if res.get("ok") and res.get("dry_run"):
+        console.print(f"[yellow]Dry-run:[/] {res.get('cmd')}")
+    elif res.get("ok"):
+        console.print("[green]Power plan switched[/]")
+    else:
+        console.print(f"[red]Error:[/] {res.get('error','unknown')}")
