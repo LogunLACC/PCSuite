@@ -25,15 +25,33 @@ class PCSuiteGUI(tk.Tk):
         self.clean_tab = ttk.Frame(nb)
         self.system_tab = ttk.Frame(nb)
         self.security_tab = ttk.Frame(nb)
+        self.registry_tab = ttk.Frame(nb)
+        self.drivers_tab = ttk.Frame(nb)
+        self.optimize_tab = ttk.Frame(nb)
+        self.process_tab = ttk.Frame(nb)
+        self.services_tab = ttk.Frame(nb)
+        self.schedule_tab = ttk.Frame(nb)
 
         nb.add(self.clean_tab, text="Clean")
         nb.add(self.system_tab, text="System")
         nb.add(self.security_tab, text="Security")
+        nb.add(self.registry_tab, text="Registry")
+        nb.add(self.drivers_tab, text="Drivers")
+        nb.add(self.optimize_tab, text="Optimize")
+        nb.add(self.process_tab, text="Processes")
+        nb.add(self.services_tab, text="Services")
+        nb.add(self.schedule_tab, text="Schedule")
 
         # Clean tab
         self._build_clean_tab(self.clean_tab)
         self._build_system_tab(self.system_tab)
         self._build_security_tab(self.security_tab)
+        self._build_registry_tab(self.registry_tab)
+        self._build_drivers_tab(self.drivers_tab)
+        self._build_optimize_tab(self.optimize_tab)
+        self._build_process_tab(self.process_tab)
+        self._build_services_tab(self.services_tab)
+        self._build_schedule_tab(self.schedule_tab)
 
     def _build_clean_tab(self, parent: ttk.Frame) -> None:
         top = ttk.Frame(parent)
@@ -104,6 +122,22 @@ class PCSuiteGUI(tk.Tk):
         btn2.pack(side=tk.TOP, fill=tk.X, padx=10)
         ttk.Button(btn2, text="Harden Minimal (What-if)", command=lambda: self.on_sec_harden_minimal(False)).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn2, text="Harden Minimal (Apply)", command=lambda: self.on_sec_harden_minimal(True)).pack(side=tk.LEFT, padx=5)
+
+        # Firewall & reputation controls
+        fw = ttk.Frame(parent)
+        fw.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Button(fw, text="Firewall Status", command=self.on_sec_fw_status).pack(side=tk.LEFT, padx=5)
+        ttk.Button(fw, text="Firewall Enable (Dry)", command=lambda: self.on_sec_fw_toggle(True, True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(fw, text="Firewall Disable (Dry)", command=lambda: self.on_sec_fw_toggle(False, True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(fw, text="Firewall Enable (Apply)", command=lambda: self.on_sec_fw_toggle(True, False)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(fw, text="Firewall Disable (Apply)", command=lambda: self.on_sec_fw_toggle(False, False)).pack(side=tk.LEFT, padx=5)
+
+        rep = ttk.Frame(parent)
+        rep.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Label(rep, text="Reputation Path:").pack(side=tk.LEFT)
+        self.rep_path = tk.Entry(rep, width=50)
+        self.rep_path.pack(side=tk.LEFT, padx=5)
+        ttk.Button(rep, text="Check", command=self.on_sec_reputation).pack(side=tk.LEFT, padx=5)
 
         out_frame = ttk.Frame(parent)
         out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -280,6 +314,444 @@ class PCSuiteGUI(tk.Tk):
         threading.Thread(target=task, daemon=True).start()
 
 
+    # Registry tab
+    def _build_registry_tab(self, parent: ttk.Frame) -> None:
+        top = ttk.Frame(parent)
+        top.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        ttk.Button(top, text="Preview", command=self.on_reg_preview).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Run (Dry)", command=lambda: self.on_reg_run(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Run (Apply)", command=lambda: self.on_reg_run(False)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Rollback Latest", command=self.on_reg_rollback).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.reg_output = tk.Text(out_frame, wrap="none")
+        self.reg_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        rb = ttk.Scrollbar(out_frame, command=self.reg_output.yview)
+        rb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.reg_output.config(yscrollcommand=rb.set)
+
+    # Drivers tab
+    def _build_drivers_tab(self, parent: ttk.Frame) -> None:
+        top = ttk.Frame(parent)
+        top.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        ttk.Button(top, text="List", command=self.on_drv_list).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Scan", command=self.on_drv_scan).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Update (Dry)", command=lambda: self.on_drv_update(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Update (Apply)", command=lambda: self.on_drv_update(False)).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.drv_output = tk.Text(out_frame, wrap="none")
+        self.drv_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        db = ttk.Scrollbar(out_frame, command=self.drv_output.yview)
+        db.pack(side=tk.RIGHT, fill=tk.Y)
+        self.drv_output.config(yscrollcommand=db.set)
+
+    # Optimize tab
+    def _build_optimize_tab(self, parent: ttk.Frame) -> None:
+        # Profiles
+        prof = ttk.LabelFrame(parent, text="Profiles")
+        prof.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Button(prof, text="List Profiles", command=self.on_opt_list_profiles).pack(side=tk.LEFT, padx=5)
+        ttk.Label(prof, text="Profile:").pack(side=tk.LEFT)
+        self.opt_profile = tk.Entry(prof, width=24)
+        self.opt_profile.insert(0, "default")
+        self.opt_profile.pack(side=tk.LEFT, padx=5)
+        ttk.Button(prof, text="Apply (Dry)", command=lambda: self.on_opt_apply(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(prof, text="Apply (Apply)", command=lambda: self.on_opt_apply(False)).pack(side=tk.LEFT, padx=5)
+
+        # Network
+        net = ttk.LabelFrame(parent, text="Network Stack")
+        net.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Button(net, text="Recommend", command=lambda: self.on_opt_net(False)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(net, text="Apply", command=lambda: self.on_opt_net(True)).pack(side=tk.LEFT, padx=5)
+
+        # Power plan
+        pwr = ttk.LabelFrame(parent, text="Power Plan")
+        pwr.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Label(pwr, text="Plan:").pack(side=tk.LEFT)
+        self.power_var = tk.StringVar(value="balanced")
+        ttk.Combobox(pwr, textvariable=self.power_var, values=("balanced","high","ultimate","power saver"), state="readonly", width=16).pack(side=tk.LEFT, padx=5)
+        ttk.Button(pwr, text="Switch (Dry)", command=lambda: self.on_opt_power(False)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(pwr, text="Switch (Apply)", command=lambda: self.on_opt_power(True)).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.opt_output = tk.Text(out_frame, wrap="none")
+        self.opt_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        ob = ttk.Scrollbar(out_frame, command=self.opt_output.yview)
+        ob.pack(side=tk.RIGHT, fill=tk.Y)
+        self.opt_output.config(yscrollcommand=ob.set)
+
+    # Process tab
+    def _build_process_tab(self, parent: ttk.Frame) -> None:
+        top = ttk.Frame(parent)
+        top.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        ttk.Label(top, text="Top N:").pack(side=tk.LEFT)
+        self.proc_limit = tk.Entry(top, width=6)
+        self.proc_limit.insert(0, "20")
+        self.proc_limit.pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="List", command=self.on_proc_list).pack(side=tk.LEFT, padx=5)
+        ttk.Label(top, text="Kill PID:").pack(side=tk.LEFT, padx=10)
+        self.proc_kill_pid = tk.Entry(top, width=8)
+        self.proc_kill_pid.pack(side=tk.LEFT)
+        ttk.Button(top, text="Kill (Dry)", command=lambda: self.on_proc_kill(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Kill (Apply)", command=lambda: self.on_proc_kill(False)).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.proc_output = tk.Text(out_frame, wrap="none")
+        self.proc_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        pb = ttk.Scrollbar(out_frame, command=self.proc_output.yview)
+        pb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.proc_output.config(yscrollcommand=pb.set)
+
+    # Services tab
+    def _build_services_tab(self, parent: ttk.Frame) -> None:
+        top = ttk.Frame(parent)
+        top.pack(side=tk.TOP, fill=tk.X, padx=10, pady=10)
+        ttk.Label(top, text="Status:").pack(side=tk.LEFT)
+        self.svc_status = tk.StringVar(value="running")
+        ttk.Combobox(top, textvariable=self.svc_status, values=("all","running","stopped"), state="readonly", width=10).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="List", command=self.on_svc_list).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.svc_output = tk.Text(out_frame, wrap="none")
+        self.svc_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        sb = ttk.Scrollbar(out_frame, command=self.svc_output.yview)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.svc_output.config(yscrollcommand=sb.set)
+
+    # Schedule tab
+    def _build_schedule_tab(self, parent: ttk.Frame) -> None:
+        top = ttk.LabelFrame(parent, text="List Tasks")
+        top.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Button(top, text="List Tasks", command=self.on_sched_list).pack(side=tk.LEFT, padx=5)
+
+        make = ttk.LabelFrame(parent, text="Create Task")
+        make.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Label(make, text="Name:").pack(side=tk.LEFT)
+        self.sch_name = tk.Entry(make, width=28)
+        self.sch_name.pack(side=tk.LEFT, padx=5)
+        ttk.Label(make, text="When:").pack(side=tk.LEFT)
+        self.sch_when = tk.Entry(make, width=12)
+        self.sch_when.insert(0, "DAILY")
+        self.sch_when.pack(side=tk.LEFT, padx=5)
+        ttk.Label(make, text="Command:").pack(side=tk.LEFT)
+        self.sch_cmd = tk.Entry(make, width=40)
+        self.sch_cmd.insert(0, "pcsuite clean run --category temp")
+        self.sch_cmd.pack(side=tk.LEFT, padx=5)
+        ttk.Button(make, text="Create (Dry)", command=lambda: self.on_sched_create(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(make, text="Create (Apply)", command=lambda: self.on_sched_create(False)).pack(side=tk.LEFT, padx=5)
+
+        rem = ttk.LabelFrame(parent, text="Delete Task")
+        rem.pack(side=tk.TOP, fill=tk.X, padx=10, pady=5)
+        ttk.Label(rem, text="Name:").pack(side=tk.LEFT)
+        self.sch_del_name = tk.Entry(rem, width=28)
+        self.sch_del_name.pack(side=tk.LEFT, padx=5)
+        ttk.Button(rem, text="Delete (Dry)", command=lambda: self.on_sched_delete(True)).pack(side=tk.LEFT, padx=5)
+        ttk.Button(rem, text="Delete (Apply)", command=lambda: self.on_sched_delete(False)).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.sch_output = tk.Text(out_frame, wrap="none")
+        self.sch_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scb = ttk.Scrollbar(out_frame, command=self.sch_output.yview)
+        scb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.sch_output.config(yscrollcommand=scb.set)
+
+    # Security helpers
+    def on_sec_fw_status(self) -> None:
+        self._append_sec("Querying firewall status ...")
+        def task():
+            code, out, err = self._run_cli(["security", "firewall"])
+            if code == 0:
+                self._append_sec(out.strip())
+            else:
+                messagebox.showerror("Firewall", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_sec_fw_toggle(self, enable: bool, dry: bool) -> None:
+        if not dry and not messagebox.askyesno("Firewall", f"Set firewall {'ON' if enable else 'OFF'} for all profiles?"):
+            return
+        self._append_sec(f"Firewall set all profiles -> {'ON' if enable else 'OFF'} (dry={dry}) ...")
+        args = ["security", "firewall", "--enable" if enable else "--no-enable"]
+        if dry:
+            args += ["--dry-run"]
+        else:
+            args += ["--no-dry-run"]
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_sec(out.strip())
+            else:
+                messagebox.showerror("Firewall", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_sec_reputation(self) -> None:
+        path = (self.rep_path.get() or "").strip()
+        if not path:
+            messagebox.showinfo("Reputation", "Enter a file path to check.")
+            return
+        self._append_sec(f"Checking reputation: {path}")
+        def task():
+            code, out, err = self._run_cli(["security", "reputation", path])
+            if code == 0:
+                self._append_sec(out.strip())
+            else:
+                messagebox.showerror("Reputation", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Registry actions
+    def _append_reg(self, text: str) -> None:
+        self.reg_output.insert(tk.END, text + "\n")
+        self.reg_output.see(tk.END)
+
+    def on_reg_preview(self) -> None:
+        self._append_reg("Previewing registry targets ...")
+        def task():
+            code, out, err = self._run_cli(["registry", "preview"])
+            if code == 0:
+                self._append_reg(out.strip())
+            else:
+                messagebox.showerror("Registry", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_reg_run(self, dry: bool) -> None:
+        if not dry:
+            if not messagebox.askyesno("Registry", "Apply registry cleanup? (backups are created)"):
+                return
+        self._append_reg(f"Running registry cleanup (dry={dry}) ...")
+        args = ["registry", "run"]
+        args += (["--dry-run"] if dry else [])
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_reg(out.strip())
+            else:
+                messagebox.showerror("Registry", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_reg_rollback(self) -> None:
+        if not messagebox.askyesno("Registry", "Restore registry from latest backup manifest?"):
+            return
+        self._append_reg("Rolling back registry ...")
+        def task():
+            code, out, err = self._run_cli(["registry", "rollback", "--yes"])
+            if code == 0:
+                self._append_reg(out.strip())
+            else:
+                messagebox.showerror("Registry", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Drivers
+    def _append_drv(self, text: str) -> None:
+        self.drv_output.insert(tk.END, text + "\n")
+        self.drv_output.see(tk.END)
+
+    def on_drv_list(self) -> None:
+        self._append_drv("Listing drivers ...")
+        def task():
+            code, out, err = self._run_cli(["drivers", "list"])
+            if code == 0:
+                self._append_drv(out.strip())
+            else:
+                messagebox.showerror("Drivers", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_drv_scan(self) -> None:
+        self._append_drv("Triggering Windows Update scan ...")
+        def task():
+            code, out, err = self._run_cli(["drivers", "scan"])
+            if code == 0:
+                self._append_drv(out.strip() or "Scan triggered")
+            else:
+                messagebox.showerror("Drivers", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_drv_update(self, dry: bool) -> None:
+        if not dry and not messagebox.askyesno("Drivers", "Start Windows Update download/install?"):
+            return
+        self._append_drv(f"Windows Update cycle (dry={dry}) ...")
+        args = ["drivers", "update"]
+        args += (["--dry-run"] if dry else ["--no-dry-run", "--yes"])
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_drv(out.strip())
+            else:
+                messagebox.showerror("Drivers", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Optimize
+    def _append_opt(self, text: str) -> None:
+        self.opt_output.insert(tk.END, text + "\n")
+        self.opt_output.see(tk.END)
+
+    def on_opt_list_profiles(self) -> None:
+        self._append_opt("Listing optimize profiles ...")
+        def task():
+            code, out, err = self._run_cli(["optimize", "list-profiles"])
+            if code == 0:
+                self._append_opt(out.strip())
+            else:
+                messagebox.showerror("Optimize", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_opt_apply(self, dry: bool) -> None:
+        profile = (self.opt_profile.get() or "").strip()
+        if not profile:
+            messagebox.showinfo("Optimize", "Enter a profile name.")
+            return
+        if not dry and not messagebox.askyesno("Optimize", f"Apply profile '{profile}'?"):
+            return
+        self._append_opt(f"Applying profile '{profile}' (dry={dry}) ...")
+        args = ["optimize", "apply", profile]
+        args += (["--dry-run"] if dry else ["--no-dry-run", "--yes"])
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_opt(out.strip())
+            else:
+                messagebox.showerror("Optimize", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_opt_net(self, do_apply: bool) -> None:
+        self._append_opt("Network stack recommendations ...")
+        def task():
+            args = ["optimize", "net"]
+            if do_apply:
+                args.append("--apply")
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_opt(out.strip())
+            else:
+                messagebox.showerror("Optimize", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_opt_power(self, do_apply: bool) -> None:
+        prof = (self.power_var.get() or "balanced").strip()
+        self._append_opt(f"Power plan -> {prof} (apply={do_apply}) ...")
+        def task():
+            args = ["optimize", "power-plan", "--profile", prof]
+            if do_apply:
+                args.append("--apply")
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_opt(out.strip())
+            else:
+                messagebox.showerror("Optimize", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Processes
+    def _append_proc(self, text: str) -> None:
+        self.proc_output.insert(tk.END, text + "\n")
+        self.proc_output.see(tk.END)
+
+    def on_proc_list(self) -> None:
+        n = (self.proc_limit.get() or "20").strip()
+        if not n.isdigit():
+            n = "20"
+        self._append_proc(f"Listing top {n} processes ...")
+        def task():
+            code, out, err = self._run_cli(["process", "list", "--limit", n])
+            if code == 0:
+                self._append_proc(out.strip())
+            else:
+                messagebox.showerror("Processes", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_proc_kill(self, dry: bool) -> None:
+        pid = (self.proc_kill_pid.get() or "").strip()
+        if not pid.isdigit():
+            messagebox.showinfo("Processes", "Enter a numeric PID.")
+            return
+        if not dry and not messagebox.askyesno("Processes", f"Kill PID {pid}?"):
+            return
+        self._append_proc(f"Killing PID {pid} (dry={dry}) ...")
+        args = ["process", "kill", "--pid", pid]
+        args += (["--dry-run"] if dry else ["--no-dry-run", "--yes"])
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_proc(out.strip())
+            else:
+                messagebox.showerror("Processes", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Services
+    def _append_svc(self, text: str) -> None:
+        self.svc_output.insert(tk.END, text + "\n")
+        self.svc_output.see(tk.END)
+
+    def on_svc_list(self) -> None:
+        status = (self.svc_status.get() or "all").strip()
+        args = ["services", "list"]
+        if status in ("running", "stopped"):
+            args += ["--status", status]
+        self._append_svc(f"Listing services (status={status}) ...")
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_svc(out.strip())
+            else:
+                messagebox.showerror("Services", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Schedule
+    def _append_sched(self, text: str) -> None:
+        self.sch_output.insert(tk.END, text + "\n")
+        self.sch_output.see(tk.END)
+
+    def on_sched_list(self) -> None:
+        self._append_sched("Listing tasks ...")
+        def task():
+            code, out, err = self._run_cli(["tasks", "list"])
+            if code == 0:
+                self._append_sched(out.strip())
+            else:
+                messagebox.showerror("Schedule", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_sched_create(self, dry: bool) -> None:
+        name = (self.sch_name.get() or "").strip()
+        when = (self.sch_when.get() or "").strip()
+        cmd = (self.sch_cmd.get() or "").strip()
+        if not name or not when or not cmd:
+            messagebox.showinfo("Schedule", "Provide name, when, and command.")
+            return
+        if not dry and not messagebox.askyesno("Schedule", f"Create task '{name}'?"):
+            return
+        self._append_sched(f"Creating task '{name}' (dry={dry}) ...")
+        args = ["schedule", "create", "--name", name, "--when", when, "--command", cmd]
+        args += (["--dry-run"] if dry else ["--no-dry-run", "--yes"])
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_sched(out.strip())
+            else:
+                messagebox.showerror("Schedule", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_sched_delete(self, dry: bool) -> None:
+        name = (self.sch_del_name.get() or "").strip()
+        if not name:
+            messagebox.showinfo("Schedule", "Provide task name to delete.")
+            return
+        if not dry and not messagebox.askyesno("Schedule", f"Delete task '{name}'?"):
+            return
+        self._append_sched(f"Deleting task '{name}' (dry={dry}) ...")
+        args = ["schedule", "delete", "--name", name]
+        args += (["--dry-run"] if dry else ["--no-dry-run", "--yes"])
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_sched(out.strip())
+            else:
+                messagebox.showerror("Schedule", err or out)
+        threading.Thread(target=task, daemon=True).start()
 def launch_gui():
     app = PCSuiteGUI()
     app.mainloop()
