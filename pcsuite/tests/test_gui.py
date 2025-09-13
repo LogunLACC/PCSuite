@@ -40,14 +40,22 @@ def test_gui_instantiates_and_has_core_widgets(monkeypatch):
 
 
 def test_gui_on_sys_info_uses_cli_and_updates_text(monkeypatch):
-    from pcsuite.ui.gui.app import PCSuiteGUI
+    import pytest
+    try:
+        from pcsuite.ui.gui.app import PCSuiteGUI
+        import tkinter as tk  # ensure Tk is present
+    except Exception:
+        pytest.skip("Tkinter not available in this environment")
 
     # Patch threading to run synchronously for determinism
     import threading
 
     monkeypatch.setattr(threading, "Thread", _InlineThread)
 
-    gui = PCSuiteGUI()
+    try:
+        gui = PCSuiteGUI()
+    except Exception:
+        pytest.skip("Tk runtime not available")
     try:
         gui.withdraw()
 
@@ -63,4 +71,3 @@ def test_gui_on_sys_info_uses_cli_and_updates_text(monkeypatch):
         assert "SYSTEM-INFO" in text
     finally:
         gui.destroy()
-

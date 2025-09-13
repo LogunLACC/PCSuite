@@ -37,19 +37,45 @@ def run(
     dry_run: bool = typer.Option(False, help="Simulate actions; no files moved"),
     yes: bool = typer.Option(False, help="Skip confirmation prompt"),
     scope: Scope = typer.Option(Scope.auto, help="Scope: auto|user|all"),
+    delete_mode: str = typer.Option(
+        "quarantine",
+        help="Deletion mode: quarantine (default), recycle, or delete",
+        case_sensitive=False,
+    ),
+    on_reboot_fallback: bool = typer.Option(
+        False,
+        help="If delete/recycle fails (locked), schedule delete on reboot",
+    ),
 ):
 	cats = [c.strip() for c in category.split(",") if c.strip()]
+	dmode = (delete_mode or "quarantine").lower().strip()
+	if dmode not in {"quarantine", "recycle", "delete"}:
+		console.print(f"[red]Invalid delete mode:[/] {delete_mode}")
+		raise typer.Exit(code=2)
+
 	if not dry_run and not yes:
 		preview = fs.enumerate_targets(cats, scope=scope.value)
 		total = sum(t.size for t in preview)
 		proceed = typer.confirm(
-			f"About to move {len(preview)} files (~{total:,} bytes) to quarantine. Continue?",
+			(
+				f"About to process {len(preview)} files (~{total:,} bytes) using mode='{dmode}'.\n"
+				+ ("Files will be moved to quarantine." if dmode == "quarantine" else (
+					"Files will be sent to Recycle Bin (no rollback)." if dmode == "recycle" else "Files will be permanently deleted (no rollback)."
+				))
+				+ " Continue?"
+			),
 			default=False,
 		)
 		if not proceed:
 			console.print("[yellow]Aborted by user[/]")
 			return
-	res = fs.execute_cleanup(cats, dry_run=dry_run, scope=scope.value)
+	res = fs.execute_cleanup(
+		cats,
+		dry_run=dry_run,
+		scope=scope.value,
+		delete_mode=dmode,
+		on_reboot_fallback=on_reboot_fallback,
+	)
 	msg = (
 		f"Moved: {res['moved']}, Failed: {res['failed']}\n"
 		f"[green]Cleanup report:[/] {res['cleanup_report']}\n"
@@ -57,7 +83,10 @@ def run(
 	if dry_run:
 		msg += "[yellow]Dry-run: no changes made[/]"
 	else:
-		msg += f"[yellow]Rollback file:[/] {res['rollback_file']}"
+		if res.get("mode") == "quarantine":
+			msg += f"[yellow]Rollback file:[/] {res['rollback_file']}"
+		else:
+			msg += "[yellow]No rollback file for this mode[/]"
 	console.print(msg)
 
 @app.command()

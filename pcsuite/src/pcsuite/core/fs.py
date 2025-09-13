@@ -8,6 +8,8 @@ import datetime
 import json
 import shutil
 import stat
+import ctypes
+from ctypes import wintypes
 from . import elevation
 
 DATA_DIR = Path(__file__).parent.parent / "data"
@@ -230,7 +232,38 @@ def purge_quarantine(
         "dry_run": dry_run,
     }
 
-def execute_cleanup(categories, dry_run: bool = False, scope: str = "auto"):
+def _send_to_recycle(path: str) -> bool:
+    try:
+        # Lazy import to keep dependency optional at import time
+        from send2trash import send2trash  # type: ignore
+
+        send2trash(path)
+        return True
+    except Exception:
+        return False
+
+
+def _delete_on_reboot(path: str) -> bool:
+    try:
+        # BOOL MoveFileExW(LPCWSTR lpExistingFileName, LPCWSTR lpNewFileName, DWORD dwFlags)
+        # Passing None for new filename and MOVEFILE_DELAY_UNTIL_REBOOT schedules delete.
+        MoveFileExW = ctypes.windll.kernel32.MoveFileExW
+        MoveFileExW.argtypes = [wintypes.LPCWSTR, wintypes.LPCWSTR, wintypes.DWORD]
+        MoveFileExW.restype = wintypes.BOOL
+        MOVEFILE_DELAY_UNTIL_REBOOT = 0x00000004
+        res = MoveFileExW(path, None, MOVEFILE_DELAY_UNTIL_REBOOT)
+        return bool(res)
+    except Exception:
+        return False
+
+
+def execute_cleanup(
+    categories,
+    dry_run: bool = False,
+    scope: str = "auto",
+    delete_mode: str = "quarantine",  # quarantine|recycle|delete
+    on_reboot_fallback: bool = False,
+):
     # Move files to a timestamped quarantine directory and record rollback metadata
     sigs = _load_yaml(SIGNATURES_PATH)
     excls = _load_yaml(EXCLUSIONS_PATH)
@@ -248,10 +281,10 @@ def execute_cleanup(categories, dry_run: bool = False, scope: str = "auto"):
             "rollback_file": None,
             "dry_run": dry_run,
         }
-    # Timestamped run dir
+    # Timestamped run dir (only for quarantine)
     ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
     run_dir = QUARANTINE_DIR / ts
-    if not dry_run:
+    if delete_mode == "quarantine" and not dry_run:
         run_dir.mkdir(parents=True, exist_ok=True)
 
     results = []
@@ -265,7 +298,7 @@ def execute_cleanup(categories, dry_run: bool = False, scope: str = "auto"):
             continue
         # Destination in quarantine
         idx += 1
-        dst = str(run_dir / f"{idx:06d}_{os.path.basename(src)}")
+        dst = str(run_dir / f"{idx:06d}_{os.path.basename(src)}") if delete_mode == "quarantine" else None
         ok = False
         err = None
         if dry_run:
@@ -277,22 +310,50 @@ def execute_cleanup(categories, dry_run: bool = False, scope: str = "auto"):
                     os.chmod(src, stat.S_IWRITE)
                 except Exception:
                     pass
-                # Move into quarantine
-                shutil.move(src, dst)
-                ok = True
+                if delete_mode == "quarantine":
+                    # Move into quarantine
+                    assert dst is not None
+                    shutil.move(src, dst)
+                    ok = True
+                elif delete_mode == "recycle":
+                    ok = _send_to_recycle(src)
+                    if not ok and on_reboot_fallback:
+                        ok = _delete_on_reboot(src)
+                elif delete_mode == "delete":
+                    try:
+                        os.remove(src)
+                        ok = True
+                    except Exception:
+                        if on_reboot_fallback:
+                            ok = _delete_on_reboot(src)
+                        else:
+                            raise
+                else:
+                    err = f"invalid delete_mode: {delete_mode}"
             except Exception as e:
                 err = str(e)
-        results.append({"src": src, "dst": dst if ok else None, "size": t.size, "ok": ok, "error": err})
-        if ok and not dry_run:
+        results.append({
+            "src": src,
+            "dst": dst if (ok and dst) else None,
+            "size": t.size,
+            "ok": ok,
+            "error": err,
+            "mode": delete_mode,
+        })
+        if ok and not dry_run and delete_mode == "quarantine":
             rollback_entries.append({"src": src, "dst": dst, "size": t.size})
 
     # Write cleanup audit and rollback files
-    action = "cleanup_dryrun" if dry_run else "cleanup"
+    # Preserve legacy naming for quarantine to keep tests stable
+    if delete_mode == "quarantine":
+        action = "cleanup_dryrun" if dry_run else "cleanup"
+    else:
+        action = (f"cleanup_{delete_mode}_dryrun" if dry_run else f"cleanup_{delete_mode}")
     cleanup_report = REPORTS_DIR / f"{action}_{ts}.json"
     with open(cleanup_report, "w", encoding="utf-8") as f:
         json.dump(results, f, indent=2)
     rollback_file = None
-    if not dry_run:
+    if not dry_run and delete_mode == "quarantine":
         rollback_file = REPORTS_DIR / f"rollback_{ts}.json"
         with open(rollback_file, "w", encoding="utf-8") as f:
             json.dump(rollback_entries, f, indent=2)
@@ -303,6 +364,7 @@ def execute_cleanup(categories, dry_run: bool = False, scope: str = "auto"):
         "cleanup_report": str(cleanup_report),
         "rollback_file": str(rollback_file) if rollback_file else None,
         "dry_run": dry_run,
+        "mode": delete_mode,
     }
 
 def find_latest_rollback():
