@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import ttk, messagebox
+from tkinter import ttk, messagebox, filedialog
 from typing import List
 import threading
 import sys
@@ -209,6 +209,8 @@ class PCSuiteGUI(tk.Tk):
         self.edr_rules_path = tk.Entry(row3, width=40)
         self.edr_rules_path.pack(side=tk.LEFT, padx=5)
         ttk.Button(row3, text="Detect", command=self.on_edr_detect).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row3, text="Browse File", command=self.on_edr_browse_rules_file).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row3, text="Browse Folder", command=self.on_edr_browse_rules_dir).pack(side=tk.LEFT, padx=5)
 
         row4 = ttk.Frame(parent)
         row4.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
@@ -218,6 +220,7 @@ class PCSuiteGUI(tk.Tk):
         self.edr_quar_dry = tk.BooleanVar(value=True)
         ttk.Checkbutton(row4, text="Dry-run", variable=self.edr_quar_dry).pack(side=tk.LEFT, padx=6)
         ttk.Button(row4, text="Quarantine", command=self.on_edr_quarantine).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row4, text="Browse", command=self.on_edr_browse_quar_file).pack(side=tk.LEFT, padx=5)
 
         out_frame = ttk.Frame(parent)
         out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -308,6 +311,24 @@ class PCSuiteGUI(tk.Tk):
             else:
                 messagebox.showerror("Quarantine", err or out)
         threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_browse_rules_file(self) -> None:
+        path = filedialog.askopenfilename(title="Select rules file", filetypes=[("YAML files", "*.yml *.yaml"), ("All files", "*.*")])
+        if path:
+            self.edr_rules_path.delete(0, tk.END)
+            self.edr_rules_path.insert(0, path)
+
+    def on_edr_browse_rules_dir(self) -> None:
+        path = filedialog.askdirectory(title="Select rules folder")
+        if path:
+            self.edr_rules_path.delete(0, tk.END)
+            self.edr_rules_path.insert(0, path)
+
+    def on_edr_browse_quar_file(self) -> None:
+        path = filedialog.askopenfilename(title="Select file to quarantine")
+        if path:
+            self.edr_quar_path.delete(0, tk.END)
+            self.edr_quar_path.insert(0, path)
 
     def _run_cli(self, args: list[str]):
         # Run the CLI module via the current Python interpreter directly (no shell)

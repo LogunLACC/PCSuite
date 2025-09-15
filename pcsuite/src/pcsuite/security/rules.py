@@ -34,16 +34,14 @@ def _field_get(event: Dict[str, Any], field: str) -> str:
         return ""
 
 
-def match_event(event: Dict[str, Any], rule: Dict[str, Any]) -> bool:
+def match_block(event: Dict[str, Any], det: Dict[str, Any]) -> bool:
     """Very small Sigma-like matcher.
 
     Supports detection:
       contains: { field: [substr, ...] }
       equals: { field: [value, ...] }
+      startswith/endswith/regex similarly
     """
-    det = rule.get("detection") or {}
-    if not isinstance(det, dict):
-        return False
     contains = det.get("contains") or {}
     equals = det.get("equals") or {}
     startswith = det.get("startswith") or {}
@@ -87,6 +85,28 @@ def match_event(event: Dict[str, Any], rule: Dict[str, Any]) -> bool:
         if not ok:
             return False
     return True if (contains or equals or startswith or endswith or regex) else False
+
+
+def match_event(event: Dict[str, Any], rule: Dict[str, Any]) -> bool:
+    det = rule.get("detection") or {}
+    if not isinstance(det, dict):
+        return False
+    if "all" in det and isinstance(det["all"], list):
+        # AND across a list of detection blocks
+        for blk in det["all"]:
+            if not isinstance(blk, dict):
+                return False
+            if not match_block(event, blk):
+                return False
+        return True
+    if "any" in det and isinstance(det["any"], list):
+        # OR across blocks
+        for blk in det["any"]:
+            if isinstance(blk, dict) and match_block(event, blk):
+                return True
+        return False
+    # Flat single block
+    return match_block(event, det)
 
 
 def evaluate_events(events: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:

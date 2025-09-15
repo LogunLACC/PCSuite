@@ -23,14 +23,60 @@ def status() -> Dict[str, Any]:
     }
 
 
-def isolate(enable: bool, dry_run: bool = True) -> Dict[str, Any]:
+def _resolve_hosts(hosts: list[str] | None) -> list[str]:
+    if not hosts:
+        return []
+    ips: list[str] = []
+    try:
+        import socket
+        for h in hosts:
+            h = (h or "").strip()
+            if not h:
+                continue
+            # If CIDR or dot contains slash, leave as-is
+            if any(ch.isalpha() for ch in h):
+                try:
+                    for fam, _, _, _, sockaddr in socket.getaddrinfo(h, None):
+                        ip = sockaddr[0]
+                        if ip and ip not in ips:
+                            ips.append(ip)
+                except Exception:
+                    continue
+            else:
+                if h not in ips:
+                    ips.append(h)
+    except Exception:
+        return ips
+    return ips
+
+
+def isolate(
+    enable: bool,
+    dry_run: bool = True,
+    block_outbound: bool = False,
+    allow_hosts: list[str] | None = None,
+) -> Dict[str, Any]:
     """High-level isolation toggle via firewall profiles.
 
     For now, map to fw.set_all_profiles(on/off) with dry-run default.
     In a future iteration, tighten outbound policy selectively.
     """
-    res = fw.set_all_profiles(enable=enable, dry_run=dry_run)
-    return {"ok": res.get("ok", False), "dry_run": res.get("dry_run", dry_run), "detail": res}
+    if not block_outbound:
+        res = fw.set_all_profiles(enable=enable, dry_run=dry_run)
+        return {"ok": res.get("ok", False), "dry_run": res.get("dry_run", dry_run), "detail": res}
+    # Block outbound mode with allowlist
+    if enable:
+        res1 = fw.set_firewall_policy(block_outbound=True, dry_run=dry_run)
+        ips = _resolve_hosts(allow_hosts)
+        res2 = fw.refresh_isolation_allowlist(ips, dry_run=dry_run)
+        ok = res1.get("ok", False) and res2.get("ok", False)
+        return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}
+    else:
+        # disable: restore default policy and remove group rules
+        res1 = fw.set_firewall_policy(block_outbound=False, dry_run=dry_run)
+        res2 = fw.refresh_isolation_allowlist([], dry_run=dry_run)
+        ok = res1.get("ok", False) and res2.get("ok", False)
+        return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}
 
 
 def list_listening_ports(limit: int = 100) -> List[Dict[str, Any]]:

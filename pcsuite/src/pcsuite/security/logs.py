@@ -32,6 +32,7 @@ def get_security_events(limit: int = 200) -> List[Dict[str, Any]]:
             props = ev.get("Properties") or []
             msg = ev.get("Message", "")
             events.append({
+                "RecordId": ev.get("RecordId"),
                 "Id": ev.get("Id"),
                 "ProviderName": ev.get("ProviderName"),
                 "LevelDisplayName": ev.get("LevelDisplayName"),
@@ -43,3 +44,42 @@ def get_security_events(limit: int = 200) -> List[Dict[str, Any]]:
             continue
     return events
 
+
+def get_powershell_events(limit: int = 200) -> List[Dict[str, Any]]:
+    if os.name != "nt":
+        return []
+    log = 'Microsoft-Windows-PowerShell/Operational'
+    data = _pwsh_json(f"Get-WinEvent -LogName '{log}' -MaxEvents {int(limit)}")
+    if not data:
+        return []
+    if isinstance(data, dict):
+        data = [data]
+    events: List[Dict[str, Any]] = []
+    for ev in data:
+        try:
+            msg = ev.get("Message", "")
+            events.append({
+                "RecordId": ev.get("RecordId"),
+                "Id": ev.get("Id"),
+                "ProviderName": ev.get("ProviderName"),
+                "LevelDisplayName": ev.get("LevelDisplayName"),
+                "TimeCreated": ev.get("TimeCreated"),
+                "Message": msg,
+            })
+        except Exception:
+            continue
+    return events
+
+
+def delta_security_events(last_id: int = 0, limit: int = 200) -> tuple[list[Dict[str, Any]], int]:
+    evs = get_security_events(limit=limit)
+    new = [e for e in evs if (e.get("RecordId") or 0) > (last_id or 0)]
+    latest = max((e.get("RecordId") or 0) for e in evs) if evs else last_id
+    return new, (latest or last_id)
+
+
+def delta_powershell_events(last_id: int = 0, limit: int = 200) -> tuple[list[Dict[str, Any]], int]:
+    evs = get_powershell_events(limit=limit)
+    new = [e for e in evs if (e.get("RecordId") or 0) > (last_id or 0)]
+    latest = max((e.get("RecordId") or 0) for e in evs) if evs else last_id
+    return new, (latest or last_id)

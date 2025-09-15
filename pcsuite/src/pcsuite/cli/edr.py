@@ -26,8 +26,10 @@ def status():
 def isolate(
     enable: bool = typer.Option(..., help="Enable (True) or disable (False) network isolation"),
     dry_run: bool = typer.Option(True, help="Simulate; no changes"),
+    block_outbound: bool = typer.Option(False, help="Also block outbound by policy with allowlist"),
+    allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Host/IP to allow when blocking outbound (repeatable)"),
 ):
-    res = edr.isolate(enable=enable, dry_run=dry_run)
+    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [])
     if res.get("ok") and res.get("dry_run"):
         console.print("[yellow]Dry-run[/]: firewall state change planned")
     elif res.get("ok"):
@@ -93,3 +95,45 @@ def quarantine_file(
     else:
         console.print("[green]Quarantined[/]")
     console.print_json(json.dumps(res))
+@app.command("watch")
+def watch(
+    rules: str = typer.Option(..., help="Rules file or directory"),
+    interval: float = typer.Option(2.0, help="Poll interval (seconds)"),
+    sources: str = typer.Option("security,powershell", help="Comma list: security,powershell"),
+):
+    """Stream new events and evaluate rules until Ctrl-C.
+
+    Note: best-effort polling approach for portability.
+    """
+    try:
+        import time
+        from pcsuite.security import logs as _logs
+        from pcsuite.security import rules as _rules
+    except Exception as e:
+        console.print(f"[red]Error loading modules:[/] {e}")
+        raise typer.Exit(1)
+
+    ruleset = _rules.load_rules(rules)
+    console.print(f"Loaded {len(ruleset)} rule(s) from {rules}")
+    last_ids = {"security": 0, "powershell": 0}
+    active = {s.strip().lower() for s in (sources or "").split(",")}
+    try:
+        while True:
+            events = []
+            if "security" in active:
+                evs, last_ids["security"] = _logs.delta_security_events(last_ids["security"])
+                events.extend(evs)
+            if "powershell" in active:
+                evp, last_ids["powershell"] = _logs.delta_powershell_events(last_ids["powershell"])
+                events.extend(evp)
+            if events:
+                matches = _rules.evaluate_events(events, ruleset)
+                if matches:
+                    table = Table(title=f"EDR Matches ({len(matches)})")
+                    table.add_column("Rule"); table.add_column("Matches")
+                    for m in matches:
+                        table.add_row(str(m.get("rule")), str(m.get("count", 0)))
+                    console.print(table)
+            time.sleep(max(0.2, float(interval)))
+    except KeyboardInterrupt:
+        console.print("[yellow]Stopped watching[/]")
