@@ -8,6 +8,7 @@ from typing import List
 from pcsuite.security import logs as seclogs
 from pcsuite.security import rules as secrules
 from pcsuite.security import edr as edrsec
+from pcsuite.security import canary as canary
 import json
 import platform
 from urllib import request as urlreq, error as urlerr
@@ -39,7 +40,8 @@ def _write_lines(lines: List[str]) -> None:
 
 class Agent:
     def __init__(self, rules_path: str | None = None, interval: float = DEFAULT_INTERVAL, sources: List[str] | None = None,
-                 http_sink: dict | None = None, heartbeat_interval: float | None = None, auto_response: dict | None = None):
+                 http_sink: dict | None = None, heartbeat_interval: float | None = None, auto_response: dict | None = None,
+                 canary_cfg: dict | None = None):
         self.rules_path = rules_path or DEFAULT_RULES
         self.interval = float(interval or DEFAULT_INTERVAL)
         s = sources or list(DEFAULT_SOURCES)
@@ -51,6 +53,7 @@ class Agent:
         self.hb_interval = float(heartbeat_interval or 0)
         self._last_hb = 0.0
         self.auto_response = auto_response or {"enabled": False}
+        self.canary_cfg = canary_cfg or {"enabled": False}
 
     def run_once(self) -> None:
         evs = []
@@ -71,10 +74,26 @@ class Agent:
 
     def run_forever(self) -> None:
         _write_lines([f"Agent starting (rules={self.rules_path}, sources={','.join(sorted(self.sources))}, interval={self.interval})"])
+        # Canary generation on start
+        try:
+            if self.canary_cfg.get("enabled") and self.canary_cfg.get("generate_on_start"):
+                paths = self.canary_cfg.get("paths") or []
+                cpd = int(self.canary_cfg.get("count_per_dir") or 1)
+                res = canary.generate(paths, count_per_dir=cpd)
+                _write_lines([f"canary generated: {res.get('count',0)} files"])
+        except Exception as e:
+            _write_lines([f"canary generate error: {e}"])
         try:
             while not self._stop.is_set():
                 try:
                     self.run_once()
+                    # Canary check
+                    if self.canary_cfg.get("enabled"):
+                        ev = canary.check()
+                        if ev.get("count"):
+                            # Alert payload for canary events
+                            self._send_alerts([{ "rule": "canary-event", "count": ev.get("count"), "sample": {"Events": ev.get("events")}}])
+                            self._maybe_respond([{ "severity": "high" }])
                 except Exception as e:
                     _write_lines([f"error: {e}"])
                 # Heartbeat

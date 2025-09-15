@@ -263,6 +263,7 @@ class PCSuiteGUI(tk.Tk):
         ttk.Checkbutton(row5, text="PowerShell", variable=self.watch_ps).pack(side=tk.LEFT, padx=6)
         ttk.Button(row5, text="Start", command=self.on_edr_watch_start).pack(side=tk.LEFT, padx=5)
         ttk.Button(row5, text="Stop", command=self.on_edr_watch_stop).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row5, text="Generate Match", command=self.on_edr_generate_match).pack(side=tk.LEFT, padx=8)
 
         # Agent policy (Auto-response & Sink)
         pol = ttk.LabelFrame(parent, text="Agent Policy & Sink")
@@ -488,6 +489,15 @@ class PCSuiteGUI(tk.Tk):
                 st.set()
             except Exception:
                 pass
+    def on_edr_generate_match(self) -> None:
+        # Inject a synthetic event that matches the demo rule
+        def task():
+            code, out, err = self._run_cli(["edr", "test-generate", "--source", "security", "--message", "DEMO-ISOLATE synthetic demo event"])
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("Generate Match", err or out)
+        threading.Thread(target=task, daemon=True).start()
         if th:
             try:
                 th.join(timeout=0.1)

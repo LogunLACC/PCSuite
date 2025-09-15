@@ -5,6 +5,8 @@ from rich.console import Console
 from rich.table import Table
 
 from pcsuite.security import edr
+from pcsuite.security import logs as seclogs
+from pcsuite.security import canary as canary
 from pcsuite.core import shell
 
 
@@ -268,3 +270,32 @@ def agent_status():
         console.print(out)
     else:
         console.print(f"[red]Error:[/] {err or out}")
+@app.command("test-generate")
+def test_generate(
+    source: str = typer.Option("security", help="Source: security|powershell"),
+    message: str = typer.Option("DEMO-ISOLATE test event", help="Message to inject"),
+):
+    ev = seclogs.inject_synthetic_event(source=source, message=message)
+    console.print_json(json.dumps({"injected": ev}))
+can = typer.Typer(help="Manage canary (decoy) files")
+app.add_typer(can, name="canary")
+
+@can.command("generate")
+def canary_generate(
+    dir: list[str] = typer.Option(..., "--dir", help="Target directory (repeatable)"),
+    count: int = typer.Option(1, help="Files per directory"),
+):
+    res = canary.generate(dir, count_per_dir=count)
+    console.print_json(json.dumps(res))
+
+@can.command("list")
+def canary_list():
+    console.print_json(json.dumps(canary.list_canaries()))
+
+@can.command("clean")
+def canary_clean():
+    console.print_json(json.dumps(canary.clean()))
+
+@can.command("check")
+def canary_check():
+    console.print_json(json.dumps(canary.check()))

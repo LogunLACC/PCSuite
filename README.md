@@ -231,6 +231,21 @@ Usage examples:
 - Resolve allowlist by profile: `pcsuite edr allowlist --profile enterprise --dns-ttl 600`
 - Isolate by profile (dry-run): `pcsuite edr isolate --enable --block-outbound --profile basic --dry-run`
 
+## Canary (Decoy) Files
+- Generate canaries:
+  - CLI: `pcsuite edr canary generate --dir "C:\\Users\\Public" --dir "%USERPROFILE%\\Documents" --count 2`
+  - List: `pcsuite edr canary list`
+  - Check: `pcsuite edr canary check`
+  - Clean: `pcsuite edr canary clean`
+- Agent integration (optional): enable in agent config (ProgramData\PCSuite\agent\agent.yml):
+  ```yaml
+  canary:
+    enabled: true
+    paths: ["C:\\Users\\Public", "%USERPROFILE%\\Documents"]
+    count_per_dir: 1
+    generate_on_start: true
+  ```
+
 ## Convenience Scripts (PowerShell)
 - Preview: `./pcsuite/scripts/preview.ps1 -Category "temp,browser"`
 - Cleanup: `./pcsuite/scripts/cleanup.ps1 -Category "temp,browser" [-DryRun]`

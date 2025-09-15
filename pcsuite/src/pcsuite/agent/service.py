@@ -26,6 +26,7 @@ def load_config() -> Dict[str, Any]:
         "auto_response": {"enabled": False, "isolate": {"block_outbound": True, "presets": ["minimal"], "extra_hosts": [], "dry_run": True, "dns_ttl": 3600.0}},
         "http_sink": {"url": None, "token": None, "verify": True, "timeout": 3.0},
         "heartbeat_interval": 300.0,
+        "canary": {"enabled": False, "paths": [], "count_per_dir": 1, "generate_on_start": False},
     }
     p = _config_path()
     if p.exists():
@@ -63,7 +64,7 @@ class PCSuiteEDRService(win32serviceutil.ServiceFramework):
         self.agent = Agent(
             rules_path=cfg.get("rules"), interval=cfg.get("interval"), sources=cfg.get("sources"),
             http_sink=cfg.get("http_sink"), heartbeat_interval=cfg.get("heartbeat_interval"),
-            auto_response=cfg.get("auto_response"),
+            auto_response=cfg.get("auto_response"), canary_cfg=cfg.get("canary"),
         )
         # Run agent loop; block until stop event is signaled
         import threading
