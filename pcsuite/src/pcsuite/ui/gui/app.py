@@ -26,6 +26,7 @@ class PCSuiteGUI(tk.Tk):
         self.system_tab = ttk.Frame(nb)
         self.security_tab = ttk.Frame(nb)
         self.edr_tab = ttk.Frame(nb)
+        self.canary_tab = ttk.Frame(nb)
         self.registry_tab = ttk.Frame(nb)
         self.drivers_tab = ttk.Frame(nb)
         self.optimize_tab = ttk.Frame(nb)
@@ -37,6 +38,7 @@ class PCSuiteGUI(tk.Tk):
         nb.add(self.system_tab, text="System")
         nb.add(self.security_tab, text="Security")
         nb.add(self.edr_tab, text="EDR")
+        nb.add(self.canary_tab, text="Canaries")
         nb.add(self.registry_tab, text="Registry")
         nb.add(self.drivers_tab, text="Drivers")
         nb.add(self.optimize_tab, text="Optimize")
@@ -49,6 +51,7 @@ class PCSuiteGUI(tk.Tk):
         self._build_system_tab(self.system_tab)
         self._build_security_tab(self.security_tab)
         self._build_edr_tab(self.edr_tab)
+        self._build_canary_tab(self.canary_tab)
         self._build_registry_tab(self.registry_tab)
         self._build_drivers_tab(self.drivers_tab)
         self._build_optimize_tab(self.optimize_tab)
@@ -180,6 +183,123 @@ class PCSuiteGUI(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Preview failed", str(e))
 
+        threading.Thread(target=task, daemon=True).start()
+
+    # Canaries tab
+    def _build_canary_tab(self, parent: ttk.Frame) -> None:
+        top = ttk.LabelFrame(parent, text="Targets")
+        top.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
+        self.can_dir_entry = tk.Entry(top, width=40)
+        self.can_dir_entry.pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="Browse", command=self.on_can_browse_dir).pack(side=tk.LEFT, padx=4)
+        ttk.Button(top, text="Add", command=self.on_can_add_dir).pack(side=tk.LEFT, padx=4)
+        ttk.Button(top, text="Remove Selected", command=self.on_can_remove_selected).pack(side=tk.LEFT, padx=4)
+
+        list_frame = ttk.Frame(parent)
+        list_frame.pack(side=tk.TOP, fill=tk.X, padx=10, pady=4)
+        self.can_dir_list = tk.Listbox(list_frame, height=5, selectmode=tk.EXTENDED)
+        self.can_dir_list.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        sb = ttk.Scrollbar(list_frame, command=self.can_dir_list.yview)
+        sb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.can_dir_list.config(yscrollcommand=sb.set)
+
+        ctrl = ttk.LabelFrame(parent, text="Actions")
+        ctrl.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
+        ttk.Label(ctrl, text="Count per dir:").pack(side=tk.LEFT)
+        self.can_count = tk.Entry(ctrl, width=6)
+        self.can_count.insert(0, "1")
+        self.can_count.pack(side=tk.LEFT, padx=4)
+        ttk.Button(ctrl, text="Generate", command=self.on_can_generate).pack(side=tk.LEFT, padx=6)
+        ttk.Button(ctrl, text="List", command=self.on_can_list).pack(side=tk.LEFT, padx=6)
+        ttk.Button(ctrl, text="Check", command=self.on_can_check).pack(side=tk.LEFT, padx=6)
+        ttk.Button(ctrl, text="Clean", command=self.on_can_clean).pack(side=tk.LEFT, padx=6)
+
+        out = ttk.Frame(parent)
+        out.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=8)
+        self.can_output = tk.Text(out, wrap="none")
+        self.can_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        csb = ttk.Scrollbar(out, command=self.can_output.yview)
+        csb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.can_output.config(yscrollcommand=csb.set)
+
+    def _append_can(self, text: str) -> None:
+        self.can_output.insert(tk.END, text + "\n")
+        self.can_output.see(tk.END)
+
+    def on_can_browse_dir(self) -> None:
+        path = filedialog.askdirectory(title="Select directory for canary")
+        if path:
+            self.can_dir_entry.delete(0, tk.END)
+            self.can_dir_entry.insert(0, path)
+
+    def on_can_add_dir(self) -> None:
+        p = (self.can_dir_entry.get() or "").strip()
+        if p:
+            self.can_dir_list.insert(tk.END, p)
+            self.can_dir_entry.delete(0, tk.END)
+
+    def on_can_remove_selected(self) -> None:
+        sel = list(self.can_dir_list.curselection())
+        sel.reverse()
+        for i in sel:
+            self.can_dir_list.delete(i)
+
+    def _collect_can_dirs(self) -> list[str]:
+        items = list(self.can_dir_list.get(0, tk.END))
+        if not items:
+            p = (self.can_dir_entry.get() or "").strip()
+            if p:
+                items = [p]
+        return items
+
+    def on_can_generate(self) -> None:
+        dirs = self._collect_can_dirs()
+        if not dirs:
+            messagebox.showinfo("Canaries", "Add at least one directory")
+            return
+        try:
+            cnt = int((self.can_count.get() or "1").strip())
+        except Exception:
+            cnt = 1
+        def task():
+            args = ["edr", "canary", "generate"]
+            for d in dirs:
+                args += ["--dir", d]
+            args += ["--count", str(cnt)]
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_can(out.strip())
+            else:
+                messagebox.showerror("Canaries", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_can_list(self) -> None:
+        def task():
+            code, out, err = self._run_cli(["edr", "canary", "list"])
+            if code == 0:
+                self._append_can(out.strip())
+            else:
+                messagebox.showerror("Canaries", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_can_check(self) -> None:
+        def task():
+            code, out, err = self._run_cli(["edr", "canary", "check"])
+            if code == 0:
+                self._append_can(out.strip())
+            else:
+                messagebox.showerror("Canaries", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_can_clean(self) -> None:
+        if not messagebox.askyesno("Canaries", "Remove all canary files recorded in manifest?"):
+            return
+        def task():
+            code, out, err = self._run_cli(["edr", "canary", "clean"])
+            if code == 0:
+                self._append_can(out.strip())
+            else:
+                messagebox.showerror("Canaries", err or out)
         threading.Thread(target=task, daemon=True).start()
 
     # EDR tab
