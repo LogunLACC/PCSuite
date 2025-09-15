@@ -9,6 +9,7 @@ from pcsuite.security import defender as defn
 from pcsuite.security import logs as seclogs
 from pcsuite.security import rules as secrules
 from pcsuite.core import fs as corefs
+import time
 
 
 def status() -> Dict[str, Any]:
@@ -23,6 +24,10 @@ def status() -> Dict[str, Any]:
     }
 
 
+_DNS_CACHE: dict[str, tuple[float, list[str]]] = {}
+_DNS_TTL_SEC = 3600.0
+
+
 def _resolve_hosts(hosts: list[str] | None) -> list[str]:
     if not hosts:
         return []
@@ -35,12 +40,26 @@ def _resolve_hosts(hosts: list[str] | None) -> list[str]:
                 continue
             # If CIDR or dot contains slash, leave as-is
             if any(ch.isalpha() for ch in h):
+                # cache lookup
+                ent = _DNS_CACHE.get(h)
+                now = time.time()
+                if ent and (now - ent[0]) < _DNS_TTL_SEC:
+                    for ip in ent[1]:
+                        if ip not in ips:
+                            ips.append(ip)
+                    continue
                 try:
+                    resolved: list[str] = []
                     for fam, _, _, _, sockaddr in socket.getaddrinfo(h, None):
                         ip = sockaddr[0]
-                        if ip and ip not in ips:
+                        if ip and ip not in resolved:
+                            resolved.append(ip)
+                    _DNS_CACHE[h] = (now, resolved)
+                    for ip in resolved:
+                        if ip not in ips:
                             ips.append(ip)
                 except Exception:
+                    _DNS_CACHE[h] = (now, [])
                     continue
             else:
                 if h not in ips:
@@ -62,6 +81,13 @@ def _preset_hosts(names: list[str] | None) -> list[str]:
             "windowsupdate.microsoft.com",
             "sls.update.microsoft.com",
             "crl.microsoft.com",
+        ],
+        "m365-core": [
+            "outlook.office365.com",
+            "login.microsoftonline.com",
+            "graph.microsoft.com",
+            "officecdn.microsoft.com",
+            "sharepoint.com",
         ],
         "microsoft-basic": [
             "time.windows.com",
@@ -173,3 +199,9 @@ def detect(rules_path: str, limit: int = 200) -> Dict[str, Any]:
 
 def quarantine_file(path: str, dry_run: bool = True) -> Dict[str, Any]:
     return corefs.quarantine_paths([path], dry_run=dry_run)
+
+
+def resolve_allowlist(allow_hosts: list[str] | None = None, presets: list[str] | None = None) -> Dict[str, Any]:
+    hosts = (allow_hosts or []) + _preset_hosts(presets)
+    ips = _resolve_hosts(hosts)
+    return {"hosts": hosts, "ips": ips}

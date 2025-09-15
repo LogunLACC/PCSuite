@@ -201,6 +201,21 @@ class PCSuiteGUI(tk.Tk):
         ttk.Checkbutton(row2, text="Enable", variable=self.edr_isolate_enable).pack(side=tk.LEFT)
         self.edr_isolate_dry = tk.BooleanVar(value=True)
         ttk.Checkbutton(row2, text="Dry-run", variable=self.edr_isolate_dry).pack(side=tk.LEFT, padx=6)
+        self.edr_block_out = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row2, text="Block Outbound", variable=self.edr_block_out).pack(side=tk.LEFT, padx=6)
+        # Preset checkboxes
+        self.preset_ntp = tk.BooleanVar(value=False)
+        self.preset_win = tk.BooleanVar(value=False)
+        self.preset_msb = tk.BooleanVar(value=False)
+        self.preset_m365 = tk.BooleanVar(value=False)
+        ttk.Checkbutton(row2, text="NTP", variable=self.preset_ntp).pack(side=tk.LEFT, padx=4)
+        ttk.Checkbutton(row2, text="WinUpdate", variable=self.preset_win).pack(side=tk.LEFT, padx=4)
+        ttk.Checkbutton(row2, text="MS-Basic", variable=self.preset_msb).pack(side=tk.LEFT, padx=4)
+        ttk.Checkbutton(row2, text="M365-Core", variable=self.preset_m365).pack(side=tk.LEFT, padx=4)
+        ttk.Label(row2, text="+Extra hosts (comma):").pack(side=tk.LEFT, padx=6)
+        self.edr_allow_extra = tk.Entry(row2, width=28)
+        self.edr_allow_extra.pack(side=tk.LEFT)
+        ttk.Button(row2, text="Preview Allowlist", command=self.on_edr_preview_allow).pack(side=tk.LEFT, padx=5)
         ttk.Button(row2, text="Isolate", command=self.on_edr_isolate).pack(side=tk.LEFT, padx=5)
 
         row3 = ttk.Frame(parent)
@@ -221,6 +236,20 @@ class PCSuiteGUI(tk.Tk):
         ttk.Checkbutton(row4, text="Dry-run", variable=self.edr_quar_dry).pack(side=tk.LEFT, padx=6)
         ttk.Button(row4, text="Quarantine", command=self.on_edr_quarantine).pack(side=tk.LEFT, padx=5)
         ttk.Button(row4, text="Browse", command=self.on_edr_browse_quar_file).pack(side=tk.LEFT, padx=5)
+
+        # Watch controls
+        row5 = ttk.LabelFrame(parent, text="Watch")
+        row5.pack(side=tk.TOP, fill=tk.X, padx=10, pady=6)
+        ttk.Label(row5, text="Interval (s):").pack(side=tk.LEFT)
+        self.watch_interval = tk.Entry(row5, width=6)
+        self.watch_interval.insert(0, "2.0")
+        self.watch_interval.pack(side=tk.LEFT, padx=4)
+        self.watch_sec = tk.BooleanVar(value=True)
+        self.watch_ps = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row5, text="Security", variable=self.watch_sec).pack(side=tk.LEFT, padx=6)
+        ttk.Checkbutton(row5, text="PowerShell", variable=self.watch_ps).pack(side=tk.LEFT, padx=6)
+        ttk.Button(row5, text="Start", command=self.on_edr_watch_start).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row5, text="Stop", command=self.on_edr_watch_stop).pack(side=tk.LEFT, padx=5)
 
         out_frame = ttk.Frame(parent)
         out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -273,6 +302,20 @@ class PCSuiteGUI(tk.Tk):
                 args += ["--dry-run"]
             else:
                 args += ["--no-dry-run"]
+            if self.edr_block_out.get():
+                args += ["--block-outbound"]
+                if self.preset_ntp.get():
+                    args += ["--preset", "ntp"]
+                if self.preset_win.get():
+                    args += ["--preset", "winupdate"]
+                if self.preset_msb.get():
+                    args += ["--preset", "microsoft-basic"]
+                if self.preset_m365.get():
+                    args += ["--preset", "m365-core"]
+                extra = (self.edr_allow_extra.get() or "").strip()
+                if extra:
+                    for h in [x.strip() for x in extra.split(",") if x.strip()]:
+                        args += ["--allow-host", h]
             code, out, err = self._run_cli(args)
             if code == 0:
                 self._append_edr(out.strip())
@@ -311,6 +354,79 @@ class PCSuiteGUI(tk.Tk):
             else:
                 messagebox.showerror("Quarantine", err or out)
         threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_preview_allow(self) -> None:
+        presets = []
+        if self.preset_ntp.get(): presets.append("ntp")
+        if self.preset_win.get(): presets.append("winupdate")
+        if self.preset_msb.get(): presets.append("microsoft-basic")
+        if self.preset_m365.get(): presets.append("m365-core")
+        extra = (self.edr_allow_extra.get() or "").strip()
+        args = ["edr", "allowlist"]
+        for p in presets:
+            args += ["--preset", p]
+        if extra:
+            for h in [x.strip() for x in extra.split(",") if x.strip()]:
+                args += ["--allow-host", h]
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("Allowlist", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    # Watch support
+    def on_edr_watch_start(self) -> None:
+        try:
+            import threading as _t
+            from pcsuite.security import logs as _logs
+            from pcsuite.security import rules as _rules
+        except Exception as e:
+            messagebox.showerror("Watch", str(e)); return
+        path = (self.edr_rules_path.get() or "").strip()
+        if not path:
+            messagebox.showinfo("Watch", "Enter rules file or directory."); return
+        try:
+            interval = float((self.watch_interval.get() or "2.0"))
+        except Exception:
+            interval = 2.0
+        rules = _rules.load_rules(path)
+        self._append_edr(f"Loaded {len(rules)} rule(s) from {path}")
+        self._watch_stop = _t.Event()
+        self._watch_last = {"security": 0, "powershell": 0}
+        def loop():
+            while not self._watch_stop.is_set():
+                evs = []
+                if self.watch_sec.get():
+                    d, self._watch_last["security"] = _logs.delta_security_events(self._watch_last["security"])
+                    evs.extend(d)
+                if self.watch_ps.get():
+                    d, self._watch_last["powershell"] = _logs.delta_powershell_events(self._watch_last["powershell"])
+                    evs.extend(d)
+                if evs:
+                    matches = _rules.evaluate_events(evs, rules)
+                    if matches:
+                        self._append_edr(f"Matches: {len(matches)}")
+                        for m in matches:
+                            self._append_edr(f"- {m.get('rule')}: {m.get('count')}")
+                self._watch_stop.wait(interval if interval > 0.2 else 0.2)
+        self._watch_thread = _t.Thread(target=loop, daemon=True)
+        self._watch_thread.start()
+
+    def on_edr_watch_stop(self) -> None:
+        st = getattr(self, "_watch_stop", None)
+        th = getattr(self, "_watch_thread", None)
+        if st:
+            try:
+                st.set()
+            except Exception:
+                pass
+        if th:
+            try:
+                th.join(timeout=0.1)
+            except Exception:
+                pass
 
     def on_edr_browse_rules_file(self) -> None:
         path = filedialog.askopenfilename(title="Select rules file", filetypes=[("YAML files", "*.yml *.yaml"), ("All files", "*.*")])

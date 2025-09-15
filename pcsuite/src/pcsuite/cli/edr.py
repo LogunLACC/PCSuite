@@ -65,6 +65,16 @@ def list_ports(limit: int = typer.Option(100, help="Max entries to show")):
     console.print(table)
 
 
+@app.command("allowlist")
+def allowlist(
+    allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Extra host/IP to include (repeatable)"),
+    preset: list[str] = typer.Option(None, "--preset", help="Presets to include: ntp, winupdate, microsoft-basic, m365-core, minimal (repeatable)"),
+):
+    """Resolve allowlist to IPs (no changes)."""
+    res = edr.resolve_allowlist(allow_hosts=allow_host or [], presets=preset or [])
+    console.print_json(json.dumps(res))
+
+
 @app.command("detect")
 def detect(
     rules: str = typer.Option(..., help="Path to rule file (.yml) or directory"),
