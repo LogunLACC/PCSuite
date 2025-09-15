@@ -60,6 +60,11 @@ pcsuite clean run --category temp,browser,dumps,do,recycle
 
 # Non-admin user-only scope (safe on roaming profiles):
 pcsuite clean run --scope user --category temp,browser,dumps --yes
+
+# Deletion modes:
+pcsuite clean run --category temp,browser --delete-mode quarantine --yes
+pcsuite clean run --category temp,browser --delete-mode recycle --yes
+pcsuite clean run --category temp,browser --delete-mode delete --on-reboot-fallback --yes
 ```
 
 - Roll back (restore from latest rollback file):
