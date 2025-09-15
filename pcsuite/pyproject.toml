@@ -1,6 +1,6 @@
 [project]
 name = "pcsuite"
-version = "1.0.5"
+version = "1.0.7"
 description = "Open-source Windows cleanup, startup, optimization, and security toolkit"
 readme = "README.md"
 requires-python = ">=3.11"

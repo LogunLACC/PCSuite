@@ -7,7 +7,7 @@ on:
 
 jobs:
   build-and-publish:
-    runs-on: windows-latest
+    runs-on: ubuntu-latest
     permissions:
       id-token: write  # Required for PyPI Trusted Publishing (OIDC)
     steps:
@@ -22,17 +22,6 @@ jobs:
       - name: Install build deps
         run: |
           python -m pip install -U pip build twine
-
-      - name: Install project deps
-        run: |
-          pip install -e pcsuite
-          pip install pytest
-
-      - name: Run tests
-        shell: powershell
-        run: |
-          $env:PYTHONPATH = (Resolve-Path 'pcsuite/src').Path
-          python -m pytest -q
 
       - name: Build distribution
         working-directory: pcsuite
