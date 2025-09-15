@@ -6,9 +6,12 @@ from pcsuite.core import shell
 
 def _signature_status(path: str) -> str:
     # PowerShell Get-AuthenticodeSignature fallback
-    code, out, err = shell.pwsh(
-        f"try {{ (Get-AuthenticodeSignature -FilePath '{path.replace("'","''")}').Status }} catch {{ '' }}"
+    # Build command safely without f-string brace ambiguity
+    safe = path.replace("'", "''")
+    cmd = "try {{ (Get-AuthenticodeSignature -FilePath '{safe}').Status }} catch {{ '' }}".format(
+        safe=safe
     )
+    code, out, err = shell.pwsh(cmd)
     if code != 0:
         return "unknown"
     val = (out or "").strip()
