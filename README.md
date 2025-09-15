@@ -249,3 +249,53 @@ Usage examples:
 ## Notes
 - Data files live in `pcsuite/src/pcsuite/data/` (`signatures.yml`, `exclusions.yml`). Populate these to see real preview results.
  - Optimize profiles live in `pcsuite/src/pcsuite/data/optimize_profiles.yml` and support simple `reg_set` steps.
+
+
+## Getting Started with EDR (Demo)
+
+This quick walkthrough lets you see detections, isolation response (dry-run), and alerting.
+
+1) Use the built-in sample rules
+- Location: `pcsuite/src/pcsuite/data/rules` (includes `response_isolate_demo.yml`)
+
+2) Run the watcher
+```
+pcsuite edr watch --rules "<repo>\pcsuite\src\pcsuite\data\rules" --interval 2 --sources security,powershell
+```
+
+3) Generate a synthetic event to trigger a rule
+- In another terminal:
+```
+pcsuite edr test-generate --source security --message "DEMO-ISOLATE demo"
+```
+- The watcher prints a match for "Demo Isolate On Match".
+
+4) Try outbound isolation (dry-run)
+```
+pcsuite edr isolate --enable --block-outbound --profile basic --dns-ttl 600 --dry-run
+```
+
+5) Configure the agent for auto-response + sink (optional)
+```
+pcsuite edr agent configure \
+  --rules "<repo>\pcsuite\src\pcsuite\data\rules" \
+  --sources security,powershell \
+  --interval 2 \
+  --auto-response \
+  --isolate-profile enterprise \
+  --isolate-dry-run \
+  --sink-url https://your-sink/ingest \
+  --sink-token YOURTOKEN \
+  --heartbeat-interval 300
+```
+- Install/start the service (Admin):
+```
+pcsuite edr agent install
+pcsuite edr agent start
+```
+
+6) Test sink
+- From the GUI (EDR tab ? HTTP Sink ? Test Alert) or CLI:
+```
+pcsuite edr allowlist --profile enterprise --dns-ttl 60   # Example resolution
+```
