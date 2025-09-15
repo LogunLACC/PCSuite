@@ -204,6 +204,9 @@ class PCSuiteGUI(tk.Tk):
         self.edr_block_out = tk.BooleanVar(value=False)
         ttk.Checkbutton(row2, text="Block Outbound", variable=self.edr_block_out).pack(side=tk.LEFT, padx=6)
         # Preset checkboxes
+        self.preset_profile = tk.StringVar(value="none")
+        ttk.Label(row2, text="Profile:").pack(side=tk.LEFT, padx=6)
+        ttk.Combobox(row2, textvariable=self.preset_profile, values=("none","minimal","basic","enterprise"), state="readonly", width=12).pack(side=tk.LEFT)
         self.preset_ntp = tk.BooleanVar(value=False)
         self.preset_win = tk.BooleanVar(value=False)
         self.preset_msb = tk.BooleanVar(value=False)
@@ -340,6 +343,9 @@ class PCSuiteGUI(tk.Tk):
                 args += ["--no-dry-run"]
             if self.edr_block_out.get():
                 args += ["--block-outbound"]
+                prof = (self.preset_profile.get() or "none").strip().lower()
+                if prof and prof != "none":
+                    args += ["--profile", prof]
                 if self.preset_ntp.get():
                     args += ["--preset", "ntp"]
                 if self.preset_win.get():
@@ -412,6 +418,9 @@ class PCSuiteGUI(tk.Tk):
         if self.preset_m365.get(): presets.append("m365-core")
         extra = (self.edr_allow_extra.get() or "").strip()
         args = ["edr", "allowlist"]
+        prof = (self.preset_profile.get() or "none").strip().lower()
+        if prof and prof != "none":
+            args += ["--profile", prof]
         for p in presets:
             args += ["--preset", p]
         ttl = (self.edr_dns_ttl.get() or "").strip()
@@ -507,8 +516,9 @@ class PCSuiteGUI(tk.Tk):
         # auto-response config
         if self.auto_resp.get():
             args += ["--auto-response"]
-            if self.edr_block_out.get():
-                args += ["--isolate-preset", ""]  # placeholder to allow options below
+            prof = (self.preset_profile.get() or "none").strip().lower()
+            if prof and prof != "none":
+                args += ["--isolate-profile", prof]
             if self.preset_ntp.get(): args += ["--isolate-preset", "ntp"]
             if self.preset_win.get(): args += ["--isolate-preset", "winupdate"]
             if self.preset_msb.get(): args += ["--isolate-preset", "microsoft-basic"]

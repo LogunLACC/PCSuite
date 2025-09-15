@@ -31,9 +31,11 @@ def isolate(
     block_outbound: bool = typer.Option(False, help="Also block outbound by policy with allowlist"),
     allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Host/IP to allow when blocking outbound (repeatable)"),
     preset: list[str] = typer.Option(None, "--preset", help="Presets: ntp, winupdate, microsoft-basic, m365-core, teams, onedrive, edge-update, minimal (repeatable)"),
+    profile: list[str] = typer.Option(None, "--profile", help="Profiles: minimal, basic, enterprise (repeatable)"),
     dns_ttl: float = typer.Option(None, help="DNS cache TTL (seconds) for resolving"),
 ):
-    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [], presets=preset or [], dns_ttl=dns_ttl)
+    presets_final = (preset or []) + edr.expand_profiles(profile or [])
+    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [], presets=presets_final, dns_ttl=dns_ttl)
     if res.get("ok") and res.get("dry_run"):
         console.print("[yellow]Dry-run[/]: firewall state change planned")
     elif res.get("ok"):
@@ -73,9 +75,11 @@ def allowlist(
     allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Extra host/IP to include (repeatable)"),
     preset: list[str] = typer.Option(None, "--preset", help="Presets to include: ntp, winupdate, microsoft-basic, m365-core, teams, onedrive, edge-update, minimal (repeatable)"),
     dns_ttl: float = typer.Option(None, help="DNS cache TTL (seconds) for resolving"),
+    profile: list[str] = typer.Option(None, "--profile", help="Profiles: minimal, basic, enterprise (repeatable)"),
 ):
     """Resolve allowlist to IPs (no changes)."""
-    res = edr.resolve_allowlist(allow_hosts=allow_host or [], presets=preset or [], dns_ttl=dns_ttl)
+    presets_final = (preset or []) + edr.expand_profiles(profile or [])
+    res = edr.resolve_allowlist(allow_hosts=allow_host or [], presets=presets_final, dns_ttl=dns_ttl)
     console.print_json(json.dumps(res))
 
 
@@ -169,6 +173,7 @@ def agent_configure(
     auto_response: bool = typer.Option(False, help="Enable auto-response on critical/actions"),
     isolate_block_out: bool = typer.Option(True, help="Auto-response isolation blocks outbound"),
     isolate_preset: list[str] = typer.Option(None, "--isolate-preset", help="Isolation presets (repeatable)"),
+    isolate_profile: list[str] = typer.Option(None, "--isolate-profile", help="Isolation profiles: minimal, basic, enterprise (repeatable)"),
     isolate_extra: list[str] = typer.Option(None, "--isolate-extra", help="Isolation extra hosts (repeatable)"),
     isolate_dry_run: bool = typer.Option(True, help="Isolation dry-run when auto-response"),
     isolate_dns_ttl: float = typer.Option(3600.0, help="DNS TTL for isolation allowlist (sec)"),
@@ -183,6 +188,8 @@ def agent_configure(
     import yaml
     base = Path(_programdata_agent_dir())
     base.mkdir(parents=True, exist_ok=True)
+    # Expand profiles into presets
+    iso_presets = (isolate_preset or []) + edr.expand_profiles(isolate_profile or [])
     cfg = {
         "rules": rules,
         "interval": float(interval),
@@ -191,7 +198,7 @@ def agent_configure(
             "enabled": bool(auto_response),
             "isolate": {
                 "block_outbound": bool(isolate_block_out),
-                "presets": isolate_preset or [],
+                "presets": iso_presets,
                 "extra_hosts": isolate_extra or [],
                 "dry_run": bool(isolate_dry_run),
                 "dns_ttl": float(isolate_dns_ttl),

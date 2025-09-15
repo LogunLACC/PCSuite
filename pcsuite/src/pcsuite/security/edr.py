@@ -130,6 +130,35 @@ def _preset_hosts(names: list[str] | None) -> list[str]:
     return uniq
 
 
+def get_isolation_profiles() -> dict[str, list[str]]:
+    """Return named profiles mapped to preset lists."""
+    return {
+        "minimal": ["minimal"],
+        "basic": ["ntp", "winupdate", "microsoft-basic"],
+        "enterprise": [
+            "m365-core", "teams", "onedrive", "edge-update",
+            "winupdate", "microsoft-basic", "ntp",
+        ],
+    }
+
+
+def expand_profiles(profiles: list[str] | None) -> list[str]:
+    profiles = profiles or []
+    mapping = get_isolation_profiles()
+    out: list[str] = []
+    for p in profiles:
+        v = mapping.get((p or "").strip().lower())
+        if v:
+            out.extend(v)
+    # de-dup
+    seen = set()
+    uniq: list[str] = []
+    for n in out:
+        if n not in seen:
+            uniq.append(n); seen.add(n)
+    return uniq
+
+
 def isolate(
     enable: bool,
     dry_run: bool = True,
