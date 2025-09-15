@@ -34,7 +34,8 @@ include = ["pcsuite*"]
 
 [tool.setuptools.package-data]
 pcsuite = [
-  "data/*.yml"
+  "data/*.yml",
+  "data/rules/*.yml"
 ]
 
 [tool.ruff]

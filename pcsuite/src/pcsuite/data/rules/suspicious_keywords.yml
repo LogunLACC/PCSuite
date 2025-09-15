@@ -1,0 +1,6 @@
+title: Suspicious Keywords
+description: Match common red-team tools in log messages
+detection:
+  contains:
+    Message: [Mimikatz, Cobalt, Rubeus]
+

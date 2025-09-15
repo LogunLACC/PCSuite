@@ -50,11 +50,46 @@ def _resolve_hosts(hosts: list[str] | None) -> list[str]:
     return ips
 
 
+def _preset_hosts(names: list[str] | None) -> list[str]:
+    """Map preset names to a best-effort list of hosts to allow.
+
+    Note: Domain lists are minimal and resolved to IPs at runtime.
+    """
+    presets = {
+        "ntp": ["time.windows.com", "pool.ntp.org"],
+        "winupdate": [
+            "download.windowsupdate.com",
+            "windowsupdate.microsoft.com",
+            "sls.update.microsoft.com",
+            "crl.microsoft.com",
+        ],
+        "microsoft-basic": [
+            "time.windows.com",
+            "download.windowsupdate.com",
+            "sls.update.microsoft.com",
+        ],
+        "minimal": ["time.windows.com"],
+    }
+    out: list[str] = []
+    for n in (names or []):
+        v = presets.get(n.strip().lower())
+        if v:
+            out.extend(v)
+    # de-dup
+    seen = set()
+    uniq: list[str] = []
+    for h in out:
+        if h not in seen:
+            uniq.append(h); seen.add(h)
+    return uniq
+
+
 def isolate(
     enable: bool,
     dry_run: bool = True,
     block_outbound: bool = False,
     allow_hosts: list[str] | None = None,
+    presets: list[str] | None = None,
 ) -> Dict[str, Any]:
     """High-level isolation toggle via firewall profiles.
 
@@ -67,7 +102,8 @@ def isolate(
     # Block outbound mode with allowlist
     if enable:
         res1 = fw.set_firewall_policy(block_outbound=True, dry_run=dry_run)
-        ips = _resolve_hosts(allow_hosts)
+        hosts = (allow_hosts or []) + _preset_hosts(presets)
+        ips = _resolve_hosts(hosts)
         res2 = fw.refresh_isolation_allowlist(ips, dry_run=dry_run)
         ok = res1.get("ok", False) and res2.get("ok", False)
         return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}

@@ -1,0 +1,9 @@
+title: PowerShell EncodedCommand
+description: Detects use of EncodedCommand in PowerShell invocation logs
+detection:
+  any:
+    - contains:
+        Message: [EncodedCommand, -enc, -encodedcommand]
+    - regex:
+        Message: ['-e[ncod]*\s+[A-Za-z0-9+/=]{20,}']
+

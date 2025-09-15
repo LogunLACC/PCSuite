@@ -28,8 +28,9 @@ def isolate(
     dry_run: bool = typer.Option(True, help="Simulate; no changes"),
     block_outbound: bool = typer.Option(False, help="Also block outbound by policy with allowlist"),
     allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Host/IP to allow when blocking outbound (repeatable)"),
+    preset: list[str] = typer.Option(None, "--preset", help="Allowlist presets: ntp, winupdate, microsoft-basic, minimal (repeatable)"),
 ):
-    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [])
+    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [], presets=preset or [])
     if res.get("ok") and res.get("dry_run"):
         console.print("[yellow]Dry-run[/]: firewall state change planned")
     elif res.get("ok"):
