@@ -289,6 +289,7 @@ class PCSuiteGUI(tk.Tk):
         self.sink_verify = tk.BooleanVar(value=True)
         ttk.Checkbutton(sink, text="Verify TLS", variable=self.sink_verify).pack(side=tk.LEFT, padx=6)
         ttk.Button(sink, text="Write Agent Config", command=self.on_agent_write_config).pack(side=tk.LEFT, padx=8)
+        ttk.Button(sink, text="Test Alert", command=self.on_edr_test_alert).pack(side=tk.LEFT, padx=8)
 
         out_frame = ttk.Frame(parent)
         out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -557,6 +558,36 @@ class PCSuiteGUI(tk.Tk):
                 self._append_edr(out.strip() or "Agent config written")
             else:
                 messagebox.showerror("Agent Config", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_test_alert(self) -> None:
+        url = (self.sink_url.get() or "").strip()
+        if not url:
+            messagebox.showinfo("Test Alert", "Enter sink URL first.")
+            return
+        token = (self.sink_token.get() or "").strip()
+        verify = self.sink_verify.get()
+        # Build payload
+        import json, platform, time
+        payload = {
+            "type": "test-alert",
+            "host": platform.node(),
+            "os": platform.platform(),
+            "ts": time.time(),
+            "message": "PCSuite EDR test alert",
+        }
+        def task():
+            try:
+                from urllib import request, error
+                data = json.dumps(payload).encode("utf-8")
+                req = request.Request(url, data=data, headers={"Content-Type": "application/json"})
+                if token:
+                    req.add_header("Authorization", f"Bearer {token}")
+                # urllib uses system trust; verify flag is advisory here
+                request.urlopen(req, timeout=5)
+                self._append_edr("[Test Alert] sent")
+            except Exception as e:
+                messagebox.showerror("Test Alert", str(e))
         threading.Thread(target=task, daemon=True).start()
 
     def on_edr_browse_rules_file(self) -> None:

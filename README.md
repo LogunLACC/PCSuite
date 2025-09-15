@@ -195,18 +195,41 @@ pcsuite optimize power-plan --profile high --apply
   - Firewall status/toggle: `pcsuite security firewall [--enable/--no-enable] [--dry-run]`
   - File reputation: `pcsuite security reputation <path>`
   
-  - EDR (prototype):
-    - Status: `pcsuite edr status`
-    - Isolation (dry-run default): `pcsuite edr isolate --enable --dry-run`
-    - Quick triage: `pcsuite edr triage`
-    - Listening ports: `pcsuite edr ports --limit 50`
-    - Scan file reputation: `pcsuite edr scan-file --path C:\\Path\\to\\file.exe`
+- EDR (prototype):
+  - Status: `pcsuite edr status`
+  - Isolation (dry-run default): `pcsuite edr isolate --enable --dry-run`
+  - Quick triage: `pcsuite edr triage`
+  - Listening ports: `pcsuite edr ports --limit 50`
+  - Scan file reputation: `pcsuite edr scan-file --path C:\\Path\\to\\file.exe`
 
 ### EDR Agent (Windows Service)
 - Configure: `pcsuite edr agent configure --rules "<rules dir or file>" --interval 2 --sources security,powershell`
 - Install service (Admin): `pcsuite edr agent install`
 - Start/Stop/Status: `pcsuite edr agent start|stop|status`
 - Remove: `pcsuite edr agent remove`
+
+## EDR Isolation Profiles & Presets
+
+Profiles are curated bundles of presets to simplify outbound isolation allowlists.
+
+- Profiles:
+  - minimal: [minimal]
+  - basic: [ntp, winupdate, microsoft-basic]
+  - enterprise: [m365-core, teams, onedrive, edge-update, winupdate, microsoft-basic, ntp]
+
+- Presets (high-level):
+  - minimal: time.windows.com
+  - ntp: time.windows.com, pool.ntp.org
+  - winupdate: download.windowsupdate.com, windowsupdate.microsoft.com, sls.update.microsoft.com, crl.microsoft.com
+  - microsoft-basic: baseline Microsoft endpoints (time, update)
+  - m365-core: outlook.office365.com, login.microsoftonline.com, graph.microsoft.com, officecdn.microsoft.com, sharepoint.com
+  - teams: teams.microsoft.com, statics.teams.cdn.office.net, presence.teams.live.com, prod.msocdn.com, teams.live.com, aadcdn.msauth.net
+  - onedrive: oneclient.sfx.ms, storage.live.com, officeclient.microsoft.com, odc.officeapps.live.com, publiccdn.sharepointonline.com
+  - edge-update: msedge.api.cdp.microsoft.com, edge.microsoft.com, msedge.sf.dl.delivery.mp.microsoft.com
+
+Usage examples:
+- Resolve allowlist by profile: `pcsuite edr allowlist --profile enterprise --dns-ttl 600`
+- Isolate by profile (dry-run): `pcsuite edr isolate --enable --block-outbound --profile basic --dry-run`
 
 ## Convenience Scripts (PowerShell)
 - Preview: `./pcsuite/scripts/preview.ps1 -Category "temp,browser"`

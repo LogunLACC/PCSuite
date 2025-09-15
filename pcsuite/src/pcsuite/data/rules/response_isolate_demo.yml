@@ -1,0 +1,15 @@
+title: Demo Isolate On Match
+description: Demonstrates per-rule response with isolation (dry-run)
+severity: high
+detection:
+  contains:
+    Message: [DEMO-ISOLATE]
+response:
+  action: isolate
+  isolate:
+    block_outbound: true
+    presets: [minimal, winupdate]
+    extra_hosts: [time.windows.com]
+    dry_run: true
+    dns_ttl: 60
+
