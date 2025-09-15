@@ -20,12 +20,13 @@ def _signature_status(path: str) -> str:
 
 def _zone_identifier(path: str) -> dict:
     # Query alternate data stream Zone.Identifier if present (downloaded from internet)
+    safe = path.replace("'", "''")
     ps = (
-        "try {"
-        f"  $s = Get-Item -LiteralPath '{path.replace("'","''")}' -Stream Zone.Identifier -ErrorAction SilentlyContinue;"
-        "  if($s){ (Get-Content -LiteralPath $s.PSPath | Out-String) } else { '' }"
-        "} catch { '' }"
-    )
+        "try {{"
+        "  $s = Get-Item -LiteralPath '{safe}' -Stream Zone.Identifier -ErrorAction SilentlyContinue;"
+        "  if($s){{ (Get-Content -LiteralPath $s.PSPath | Out-String) }} else {{ '' }}"
+        "}} catch {{ '' }}"
+    ).format(safe=safe)
     code, out, err = shell.pwsh(ps)
     if code != 0 or not (out or "").strip():
         return {"has_zone": False, "zone_id": None}
