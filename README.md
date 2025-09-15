@@ -202,6 +202,12 @@ pcsuite optimize power-plan --profile high --apply
     - Listening ports: `pcsuite edr ports --limit 50`
     - Scan file reputation: `pcsuite edr scan-file --path C:\\Path\\to\\file.exe`
 
+### EDR Agent (Windows Service)
+- Configure: `pcsuite edr agent configure --rules "<rules dir or file>" --interval 2 --sources security,powershell`
+- Install service (Admin): `pcsuite edr agent install`
+- Start/Stop/Status: `pcsuite edr agent start|stop|status`
+- Remove: `pcsuite edr agent remove`
+
 ## Convenience Scripts (PowerShell)
 - Preview: `./pcsuite/scripts/preview.ps1 -Category "temp,browser"`
 - Cleanup: `./pcsuite/scripts/cleanup.ps1 -Category "temp,browser" [-DryRun]`

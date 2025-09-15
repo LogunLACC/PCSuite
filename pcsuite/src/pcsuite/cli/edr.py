@@ -148,3 +148,82 @@ def watch(
             time.sleep(max(0.2, float(interval)))
     except KeyboardInterrupt:
         console.print("[yellow]Stopped watching[/]")
+agent = typer.Typer(help="Install and manage the background EDR agent (Windows service)")
+app.add_typer(agent, name="agent")
+
+
+def _programdata_agent_dir() -> str:
+    return str((Path(os.environ.get("ProgramData") or r"C:\\ProgramData") / "PCSuite" / "agent").resolve())
+
+
+@agent.command("configure")
+def agent_configure(
+    rules: str = typer.Option(None, help="Rules file or directory (default: built-in sample rules)"),
+    interval: float = typer.Option(2.0, help="Poll interval in seconds"),
+    sources: str = typer.Option("security,powershell", help="Comma list of sources"),
+):
+    """Write agent config to ProgramData (agent.yml)."""
+    import yaml
+    base = Path(_programdata_agent_dir())
+    base.mkdir(parents=True, exist_ok=True)
+    cfg = {
+        "rules": rules,
+        "interval": float(interval),
+        "sources": [s.strip() for s in (sources or "").split(",") if s.strip()],
+    }
+    (base / "agent.yml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
+    console.print(f"[green]Wrote[/] {base / 'agent.yml'}")
+
+
+def _py_exe() -> str:
+    return sys.executable
+
+
+@agent.command("install")
+def agent_install(auto_start: bool = typer.Option(True, help="Set service startup to automatic")):
+    """Install the Windows service (requires Administrator)."""
+    cmd = f"{_py_exe()} -m pcsuite.agent.service install"
+    if auto_start:
+        cmd += " --startup auto"
+    code, out, err = shell.cmdline(cmd)
+    if code == 0:
+        console.print("[green]Service installed[/]")
+    else:
+        console.print(f"[red]Error:[/] {err or out}")
+
+
+@agent.command("remove")
+def agent_remove():
+    code, out, err = shell.cmdline(f"{_py_exe()} -m pcsuite.agent.service remove")
+    if code == 0:
+        console.print("[green]Service removed[/]")
+    else:
+        console.print(f"[red]Error:[/] {err or out}")
+
+
+@agent.command("start")
+def agent_start():
+    code, out, err = shell.cmdline(f"{_py_exe()} -m pcsuite.agent.service start")
+    if code == 0:
+        console.print("[green]Service started[/]")
+    else:
+        console.print(f"[red]Error:[/] {err or out}")
+
+
+@agent.command("stop")
+def agent_stop():
+    code, out, err = shell.cmdline(f"{_py_exe()} -m pcsuite.agent.service stop")
+    if code == 0:
+        console.print("[green]Service stopped[/]")
+    else:
+        console.print(f"[red]Error:[/] {err or out}")
+
+
+@agent.command("status")
+def agent_status():
+    # Use sc query for quick state
+    code, out, err = shell.cmdline("sc query PCSuiteEDRAgent")
+    if code == 0:
+        console.print(out)
+    else:
+        console.print(f"[red]Error:[/] {err or out}")
