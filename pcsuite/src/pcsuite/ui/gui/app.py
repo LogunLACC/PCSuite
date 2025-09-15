@@ -25,6 +25,7 @@ class PCSuiteGUI(tk.Tk):
         self.clean_tab = ttk.Frame(nb)
         self.system_tab = ttk.Frame(nb)
         self.security_tab = ttk.Frame(nb)
+        self.edr_tab = ttk.Frame(nb)
         self.registry_tab = ttk.Frame(nb)
         self.drivers_tab = ttk.Frame(nb)
         self.optimize_tab = ttk.Frame(nb)
@@ -35,6 +36,7 @@ class PCSuiteGUI(tk.Tk):
         nb.add(self.clean_tab, text="Clean")
         nb.add(self.system_tab, text="System")
         nb.add(self.security_tab, text="Security")
+        nb.add(self.edr_tab, text="EDR")
         nb.add(self.registry_tab, text="Registry")
         nb.add(self.drivers_tab, text="Drivers")
         nb.add(self.optimize_tab, text="Optimize")
@@ -46,6 +48,7 @@ class PCSuiteGUI(tk.Tk):
         self._build_clean_tab(self.clean_tab)
         self._build_system_tab(self.system_tab)
         self._build_security_tab(self.security_tab)
+        self._build_edr_tab(self.edr_tab)
         self._build_registry_tab(self.registry_tab)
         self._build_drivers_tab(self.drivers_tab)
         self._build_optimize_tab(self.optimize_tab)
@@ -177,6 +180,133 @@ class PCSuiteGUI(tk.Tk):
             except Exception as e:
                 messagebox.showerror("Preview failed", str(e))
 
+        threading.Thread(target=task, daemon=True).start()
+
+    # EDR tab
+    def _build_edr_tab(self, parent: ttk.Frame) -> None:
+        # Controls
+        row1 = ttk.Frame(parent)
+        row1.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
+        ttk.Button(row1, text="Status", command=self.on_edr_status).pack(side=tk.LEFT, padx=5)
+        ttk.Button(row1, text="Triage", command=self.on_edr_triage).pack(side=tk.LEFT, padx=5)
+        ttk.Label(row1, text="Ports limit:").pack(side=tk.LEFT, padx=8)
+        self.edr_ports_limit = tk.Entry(row1, width=6)
+        self.edr_ports_limit.insert(0, "50")
+        self.edr_ports_limit.pack(side=tk.LEFT)
+        ttk.Button(row1, text="Ports", command=self.on_edr_ports).pack(side=tk.LEFT, padx=5)
+
+        row2 = ttk.Frame(parent)
+        row2.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
+        self.edr_isolate_enable = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row2, text="Enable", variable=self.edr_isolate_enable).pack(side=tk.LEFT)
+        self.edr_isolate_dry = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row2, text="Dry-run", variable=self.edr_isolate_dry).pack(side=tk.LEFT, padx=6)
+        ttk.Button(row2, text="Isolate", command=self.on_edr_isolate).pack(side=tk.LEFT, padx=5)
+
+        row3 = ttk.Frame(parent)
+        row3.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
+        ttk.Label(row3, text="Rules path:").pack(side=tk.LEFT)
+        self.edr_rules_path = tk.Entry(row3, width=40)
+        self.edr_rules_path.pack(side=tk.LEFT, padx=5)
+        ttk.Button(row3, text="Detect", command=self.on_edr_detect).pack(side=tk.LEFT, padx=5)
+
+        row4 = ttk.Frame(parent)
+        row4.pack(side=tk.TOP, fill=tk.X, padx=10, pady=8)
+        ttk.Label(row4, text="Quarantine file:").pack(side=tk.LEFT)
+        self.edr_quar_path = tk.Entry(row4, width=40)
+        self.edr_quar_path.pack(side=tk.LEFT, padx=5)
+        self.edr_quar_dry = tk.BooleanVar(value=True)
+        ttk.Checkbutton(row4, text="Dry-run", variable=self.edr_quar_dry).pack(side=tk.LEFT, padx=6)
+        ttk.Button(row4, text="Quarantine", command=self.on_edr_quarantine).pack(side=tk.LEFT, padx=5)
+
+        out_frame = ttk.Frame(parent)
+        out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
+        self.edr_output = tk.Text(out_frame, wrap="none")
+        self.edr_output.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        eb = ttk.Scrollbar(out_frame, command=self.edr_output.yview)
+        eb.pack(side=tk.RIGHT, fill=tk.Y)
+        self.edr_output.config(yscrollcommand=eb.set)
+
+    def _append_edr(self, text: str) -> None:
+        self.edr_output.insert(tk.END, text + "\n")
+        self.edr_output.see(tk.END)
+
+    def on_edr_status(self) -> None:
+        def task():
+            code, out, err = self._run_cli(["edr", "status"])
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("EDR Status", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_triage(self) -> None:
+        def task():
+            code, out, err = self._run_cli(["edr", "triage"])
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("EDR Triage", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_ports(self) -> None:
+        n = (self.edr_ports_limit.get() or "50").strip()
+        if not n.isdigit():
+            n = "50"
+        def task():
+            code, out, err = self._run_cli(["edr", "ports", "--limit", n])
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("EDR Ports", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_isolate(self) -> None:
+        enable = self.edr_isolate_enable.get()
+        dry = self.edr_isolate_dry.get()
+        def task():
+            args = ["edr", "isolate", "--enable", str(enable)]
+            if dry:
+                args += ["--dry-run"]
+            else:
+                args += ["--no-dry-run"]
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("EDR Isolate", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_detect(self) -> None:
+        path = (self.edr_rules_path.get() or "").strip()
+        if not path:
+            messagebox.showinfo("EDR Detect", "Enter rules file or directory path.")
+            return
+        def task():
+            code, out, err = self._run_cli(["edr", "detect", "--rules", path])
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("EDR Detect", err or out)
+        threading.Thread(target=task, daemon=True).start()
+
+    def on_edr_quarantine(self) -> None:
+        path = (self.edr_quar_path.get() or "").strip()
+        if not path:
+            messagebox.showinfo("Quarantine", "Enter a file path to quarantine.")
+            return
+        dry = self.edr_quar_dry.get()
+        def task():
+            args = ["edr", "quarantine-file", path]
+            if dry:
+                args += ["--dry-run"]
+            else:
+                args += ["--no-dry-run", "--yes"]
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_edr(out.strip())
+            else:
+                messagebox.showerror("Quarantine", err or out)
         threading.Thread(target=task, daemon=True).start()
 
     def _run_cli(self, args: list[str]):

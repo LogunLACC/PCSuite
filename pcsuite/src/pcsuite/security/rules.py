@@ -1,5 +1,6 @@
 from __future__ import annotations
 from typing import List, Dict, Any
+import re
 from pathlib import Path
 import yaml
 
@@ -45,6 +46,9 @@ def match_event(event: Dict[str, Any], rule: Dict[str, Any]) -> bool:
         return False
     contains = det.get("contains") or {}
     equals = det.get("equals") or {}
+    startswith = det.get("startswith") or {}
+    endswith = det.get("endswith") or {}
+    regex = det.get("regex") or {}
     # contains
     for field, values in (contains.items() if isinstance(contains, dict) else []):
         fv = _field_get(event, field)
@@ -57,7 +61,32 @@ def match_event(event: Dict[str, Any], rule: Dict[str, Any]) -> bool:
         ok = any(str(v) == fv for v in (values or []))
         if not ok:
             return False
-    return True if (contains or equals) else False
+    # startswith
+    for field, values in (startswith.items() if isinstance(startswith, dict) else []):
+        fv = _field_get(event, field)
+        ok = any(fv.startswith(str(v)) for v in (values or []))
+        if not ok:
+            return False
+    # endswith
+    for field, values in (endswith.items() if isinstance(endswith, dict) else []):
+        fv = _field_get(event, field)
+        ok = any(fv.endswith(str(v)) for v in (values or []))
+        if not ok:
+            return False
+    # regex
+    for field, values in (regex.items() if isinstance(regex, dict) else []):
+        fv = _field_get(event, field)
+        ok = False
+        for pat in (values or []):
+            try:
+                if re.search(str(pat), fv):
+                    ok = True
+                    break
+            except re.error:
+                continue
+        if not ok:
+            return False
+    return True if (contains or equals or startswith or endswith or regex) else False
 
 
 def evaluate_events(events: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
@@ -74,4 +103,3 @@ def evaluate_events(events: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -
         if count:
             matches.append({"rule": str(title), "count": count, "sample": first or {}})
     return matches
-
