@@ -194,6 +194,13 @@ pcsuite optimize power-plan --profile high --apply
   - With Explorer restart prompt (minimal): `pcsuite security harden --profile minimal --apply --restart-explorer`
   - Firewall status/toggle: `pcsuite security firewall [--enable/--no-enable] [--dry-run]`
   - File reputation: `pcsuite security reputation <path>`
+  
+  - EDR (prototype):
+    - Status: `pcsuite edr status`
+    - Isolation (dry-run default): `pcsuite edr isolate --enable --dry-run`
+    - Quick triage: `pcsuite edr triage`
+    - Listening ports: `pcsuite edr ports --limit 50`
+    - Scan file reputation: `pcsuite edr scan-file --path C:\\Path\\to\\file.exe`
 
 ## Convenience Scripts (PowerShell)
 - Preview: `./pcsuite/scripts/preview.ps1 -Category "temp,browser"`
