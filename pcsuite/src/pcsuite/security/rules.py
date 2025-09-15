@@ -128,5 +128,6 @@ def evaluate_events(events: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -
                 "severity": r.get("severity"),
                 "action": r.get("action"),
                 "path": r.get("__path"),
+                "response": r.get("response"),
             })
     return matches

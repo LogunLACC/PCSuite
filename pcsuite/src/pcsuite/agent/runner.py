@@ -142,6 +142,27 @@ def run_agent(rules_path: str | None = None, interval: float = DEFAULT_INTERVAL,
         cfg = self.auto_response or {}
         if not cfg.get("enabled"):
             return
+        # Rule-specific response takes precedence
+        for m in matches:
+            resp = m.get("response")
+            if isinstance(resp, dict):
+                act = str(resp.get("action") or "").lower()
+                if act == "isolate":
+                    riso = resp.get("isolate") or {}
+                    try:
+                        edrsec.isolate(
+                            enable=True,
+                            dry_run=bool(riso.get("dry_run", True)),
+                            block_outbound=bool(riso.get("block_outbound", True)),
+                            allow_hosts=riso.get("extra_hosts") or [],
+                            presets=riso.get("presets") or [],
+                            dns_ttl=float(riso.get("dns_ttl", 3600.0)),
+                        )
+                        _write_lines([f"auto-response: rule isolate ({m.get('rule')})"])
+                        return
+                    except Exception as e:
+                        _write_lines([f"auto-response error (rule): {e}"])
+        # Fallback: global policy on high/critical or generic action
         do_isolate = False
         for m in matches:
             sev = str(m.get("severity") or "").lower()
@@ -160,6 +181,6 @@ def run_agent(rules_path: str | None = None, interval: float = DEFAULT_INTERVAL,
                 presets=iso.get("presets") or [],
                 dns_ttl=float(iso.get("dns_ttl", 3600.0)),
             )
-            _write_lines(["auto-response: isolation triggered"])
+            _write_lines(["auto-response: isolation triggered (global)"])
         except Exception as e:
-            _write_lines([f"auto-response error: {e}"])
+            _write_lines([f"auto-response error (global): {e}"])

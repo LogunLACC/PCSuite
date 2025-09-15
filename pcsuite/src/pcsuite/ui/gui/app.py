@@ -261,6 +261,32 @@ class PCSuiteGUI(tk.Tk):
         ttk.Button(row5, text="Start", command=self.on_edr_watch_start).pack(side=tk.LEFT, padx=5)
         ttk.Button(row5, text="Stop", command=self.on_edr_watch_stop).pack(side=tk.LEFT, padx=5)
 
+        # Agent policy (Auto-response & Sink)
+        pol = ttk.LabelFrame(parent, text="Agent Policy & Sink")
+        pol.pack(side=tk.TOP, fill=tk.X, padx=10, pady=6)
+        self.auto_resp = tk.BooleanVar(value=False)
+        ttk.Checkbutton(pol, text="Enable Auto-response", variable=self.auto_resp).pack(side=tk.LEFT, padx=6)
+        self.auto_iso_block = tk.BooleanVar(value=True)
+        ttk.Checkbutton(pol, text="Block Outbound", variable=self.auto_iso_block).pack(side=tk.LEFT, padx=6)
+        self.auto_iso_dry = tk.BooleanVar(value=True)
+        ttk.Checkbutton(pol, text="Dry-run", variable=self.auto_iso_dry).pack(side=tk.LEFT, padx=6)
+        ttk.Label(pol, text="Heartbeat(s):").pack(side=tk.LEFT, padx=6)
+        self.hb_interval = tk.Entry(pol, width=8)
+        self.hb_interval.insert(0, "300")
+        self.hb_interval.pack(side=tk.LEFT)
+
+        sink = ttk.LabelFrame(parent, text="HTTP Sink")
+        sink.pack(side=tk.TOP, fill=tk.X, padx=10, pady=6)
+        ttk.Label(sink, text="URL:").pack(side=tk.LEFT)
+        self.sink_url = tk.Entry(sink, width=40)
+        self.sink_url.pack(side=tk.LEFT, padx=4)
+        ttk.Label(sink, text="Token:").pack(side=tk.LEFT)
+        self.sink_token = tk.Entry(sink, width=28)
+        self.sink_token.pack(side=tk.LEFT, padx=4)
+        self.sink_verify = tk.BooleanVar(value=True)
+        ttk.Checkbutton(sink, text="Verify TLS", variable=self.sink_verify).pack(side=tk.LEFT, padx=6)
+        ttk.Button(sink, text="Write Agent Config", command=self.on_agent_write_config).pack(side=tk.LEFT, padx=8)
+
         out_frame = ttk.Frame(parent)
         out_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, padx=10, pady=10)
         self.edr_output = tk.Text(out_frame, wrap="none")
@@ -457,6 +483,71 @@ class PCSuiteGUI(tk.Tk):
                 th.join(timeout=0.1)
             except Exception:
                 pass
+
+    def on_agent_write_config(self) -> None:
+        # Compose agent configure args from GUI fields
+        args = ["edr", "agent", "configure"]
+        # rules path
+        rpath = (self.edr_rules_path.get() or "").strip()
+        if rpath:
+            args += ["--rules", rpath]
+        # interval for watch loop
+        interval = (self.watch_interval.get() or "2.0").strip()
+        try:
+            float(interval)
+            args += ["--interval", interval]
+        except Exception:
+            pass
+        # sources
+        sources = []
+        if self.watch_sec.get(): sources.append("security")
+        if self.watch_ps.get(): sources.append("powershell")
+        if sources:
+            args += ["--sources", ",".join(sources)]
+        # auto-response config
+        if self.auto_resp.get():
+            args += ["--auto-response"]
+            if self.edr_block_out.get():
+                args += ["--isolate-preset", ""]  # placeholder to allow options below
+            if self.preset_ntp.get(): args += ["--isolate-preset", "ntp"]
+            if self.preset_win.get(): args += ["--isolate-preset", "winupdate"]
+            if self.preset_msb.get(): args += ["--isolate-preset", "microsoft-basic"]
+            if self.preset_m365.get(): args += ["--isolate-preset", "m365-core"]
+            if self.preset_teams.get(): args += ["--isolate-preset", "teams"]
+            if self.preset_oned.get(): args += ["--isolate-preset", "onedrive"]
+            if self.preset_edge.get(): args += ["--isolate-preset", "edge-update"]
+            if self.edr_block_out.get(): args += ["--isolate-block-out"]
+            if self.auto_iso_dry.get(): args += ["--isolate-dry-run"]
+            ttl = (self.edr_dns_ttl.get() or "").strip()
+            try:
+                if ttl:
+                    float(ttl)
+                    args += ["--isolate-dns-ttl", ttl]
+            except Exception:
+                pass
+        # sink
+        url = (self.sink_url.get() or "").strip()
+        if url:
+            args += ["--sink-url", url]
+        token = (self.sink_token.get() or "").strip()
+        if token:
+            args += ["--sink-token", token]
+        if not self.sink_verify.get():
+            args += ["--no-sink-verify"]
+        hb = (self.hb_interval.get() or "").strip()
+        try:
+            if hb:
+                float(hb)
+                args += ["--heartbeat-interval", hb]
+        except Exception:
+            pass
+        def task():
+            code, out, err = self._run_cli(args)
+            if code == 0:
+                self._append_edr(out.strip() or "Agent config written")
+            else:
+                messagebox.showerror("Agent Config", err or out)
+        threading.Thread(target=task, daemon=True).start()
 
     def on_edr_browse_rules_file(self) -> None:
         path = filedialog.askopenfilename(title="Select rules file", filetypes=[("YAML files", "*.yml *.yaml"), ("All files", "*.*")])

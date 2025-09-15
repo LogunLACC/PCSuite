@@ -99,15 +99,21 @@ def _preset_hosts(names: list[str] | None) -> list[str]:
             "teams.microsoft.com",
             "statics.teams.cdn.office.net",
             "presence.teams.live.com",
+            "prod.msocdn.com",
+            "teams.live.com",
+            "aadcdn.msauth.net",
         ],
         "onedrive": [
             "oneclient.sfx.ms",
             "storage.live.com",
-            "oneclient.sfx.ms",
+            "officeclient.microsoft.com",
+            "odc.officeapps.live.com",
+            "publiccdn.sharepointonline.com",
         ],
         "edge-update": [
             "msedge.api.cdp.microsoft.com",
             "edge.microsoft.com",
+            "msedge.sf.dl.delivery.mp.microsoft.com",
         ],
     }
     out: list[str] = []
