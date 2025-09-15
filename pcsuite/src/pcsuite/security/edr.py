@@ -6,6 +6,9 @@ import psutil
 from pcsuite.security import firewall as fw
 from pcsuite.security import reputation as rep
 from pcsuite.security import defender as defn
+from pcsuite.security import logs as seclogs
+from pcsuite.security import rules as secrules
+from pcsuite.core import fs as corefs
 
 
 def status() -> Dict[str, Any]:
@@ -78,3 +81,13 @@ def scan_file(path: str) -> Dict[str, Any]:
     info = rep.check_reputation(path)
     return {"path": path, "reputation": info}
 
+
+def detect(rules_path: str, limit: int = 200) -> Dict[str, Any]:
+    events = seclogs.get_security_events(limit=limit)
+    rules = secrules.load_rules(rules_path)
+    matches = secrules.evaluate_events(events, rules)
+    return {"events": len(events), "rules": len(rules), "matches": matches}
+
+
+def quarantine_file(path: str, dry_run: bool = True) -> Dict[str, Any]:
+    return corefs.quarantine_paths([path], dry_run=dry_run)

@@ -367,6 +367,61 @@ def execute_cleanup(
         "mode": delete_mode,
     }
 
+
+def quarantine_paths(paths: list[str], dry_run: bool = False) -> dict:
+    """Quarantine specific file paths (outside of category signatures).
+
+    Moves files to a timestamped quarantine directory and writes a rollback mapping.
+    """
+    REPORTS_DIR.mkdir(exist_ok=True)
+    if dry_run:
+        return {
+            "moved": len(paths),
+            "failed": 0,
+            "cleanup_report": str(REPORTS_DIR / "quarantine_paths_dryrun.json"),
+            "rollback_file": None,
+            "dry_run": True,
+            "mode": "quarantine",
+        }
+    QUARANTINE_DIR.mkdir(exist_ok=True)
+    ts = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
+    run_dir = QUARANTINE_DIR / ts
+    run_dir.mkdir(parents=True, exist_ok=True)
+    results = []
+    rollback_entries = []
+    idx = 0
+    for src in paths:
+        idx += 1
+        dst = str(run_dir / f"{idx:06d}_{os.path.basename(src)}")
+        ok = False
+        err = None
+        try:
+            try:
+                os.chmod(src, stat.S_IWRITE)
+            except Exception:
+                pass
+            shutil.move(src, dst)
+            ok = True
+        except Exception as e:
+            err = str(e)
+        results.append({"src": src, "dst": dst if ok else None, "ok": ok, "error": err})
+        if ok:
+            rollback_entries.append({"src": src, "dst": dst})
+    cleanup_report = REPORTS_DIR / f"cleanup_{ts}.json"
+    with open(cleanup_report, "w", encoding="utf-8") as f:
+        json.dump(results, f, indent=2)
+    rollback_file = REPORTS_DIR / f"rollback_{ts}.json"
+    with open(rollback_file, "w", encoding="utf-8") as f:
+        json.dump(rollback_entries, f, indent=2)
+    return {
+        "moved": sum(1 for r in results if r.get("ok")),
+        "failed": sum(1 for r in results if not r.get("ok")),
+        "cleanup_report": str(cleanup_report),
+        "rollback_file": str(rollback_file),
+        "dry_run": False,
+        "mode": "quarantine",
+    }
+
 def find_latest_rollback():
     REPORTS_DIR.mkdir(exist_ok=True)
     files = sorted(REPORTS_DIR.glob("rollback_*.json"))
