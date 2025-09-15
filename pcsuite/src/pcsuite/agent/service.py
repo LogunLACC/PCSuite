@@ -19,7 +19,14 @@ def _config_path() -> Path:
 
 
 def load_config() -> Dict[str, Any]:
-    cfg = {"interval": DEFAULT_INTERVAL, "sources": ["security", "powershell"], "rules": None}
+    cfg: Dict[str, Any] = {
+        "interval": DEFAULT_INTERVAL,
+        "sources": ["security", "powershell"],
+        "rules": None,
+        "auto_response": {"enabled": False, "isolate": {"block_outbound": True, "presets": ["minimal"], "extra_hosts": [], "dry_run": True, "dns_ttl": 3600.0}},
+        "http_sink": {"url": None, "token": None, "verify": True, "timeout": 3.0},
+        "heartbeat_interval": 300.0,
+    }
     p = _config_path()
     if p.exists():
         try:
@@ -53,7 +60,11 @@ class PCSuiteEDRService(win32serviceutil.ServiceFramework):
     def SvcDoRun(self):
         servicemanager.LogMsg(servicemanager.EVENTLOG_INFORMATION_TYPE, servicemanager.PYS_SERVICE_STARTED, (self._svc_name_, ""))
         cfg = load_config()
-        self.agent = Agent(rules_path=cfg.get("rules"), interval=cfg.get("interval"), sources=cfg.get("sources"))
+        self.agent = Agent(
+            rules_path=cfg.get("rules"), interval=cfg.get("interval"), sources=cfg.get("sources"),
+            http_sink=cfg.get("http_sink"), heartbeat_interval=cfg.get("heartbeat_interval"),
+            auto_response=cfg.get("auto_response"),
+        )
         # Run agent loop; block until stop event is signaled
         import threading
         t = threading.Thread(target=self.agent.run_forever, daemon=True)
@@ -64,4 +75,3 @@ class PCSuiteEDRService(win32serviceutil.ServiceFramework):
 
 if __name__ == "__main__":
     win32serviceutil.HandleCommandLine(PCSuiteEDRService)
-

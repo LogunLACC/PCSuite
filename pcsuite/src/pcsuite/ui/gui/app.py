@@ -208,10 +208,20 @@ class PCSuiteGUI(tk.Tk):
         self.preset_win = tk.BooleanVar(value=False)
         self.preset_msb = tk.BooleanVar(value=False)
         self.preset_m365 = tk.BooleanVar(value=False)
+        self.preset_teams = tk.BooleanVar(value=False)
+        self.preset_oned = tk.BooleanVar(value=False)
+        self.preset_edge = tk.BooleanVar(value=False)
         ttk.Checkbutton(row2, text="NTP", variable=self.preset_ntp).pack(side=tk.LEFT, padx=4)
         ttk.Checkbutton(row2, text="WinUpdate", variable=self.preset_win).pack(side=tk.LEFT, padx=4)
         ttk.Checkbutton(row2, text="MS-Basic", variable=self.preset_msb).pack(side=tk.LEFT, padx=4)
         ttk.Checkbutton(row2, text="M365-Core", variable=self.preset_m365).pack(side=tk.LEFT, padx=4)
+        ttk.Checkbutton(row2, text="Teams", variable=self.preset_teams).pack(side=tk.LEFT, padx=4)
+        ttk.Checkbutton(row2, text="OneDrive", variable=self.preset_oned).pack(side=tk.LEFT, padx=4)
+        ttk.Checkbutton(row2, text="Edge Update", variable=self.preset_edge).pack(side=tk.LEFT, padx=4)
+        ttk.Label(row2, text="DNS TTL(s):").pack(side=tk.LEFT, padx=6)
+        self.edr_dns_ttl = tk.Entry(row2, width=6)
+        self.edr_dns_ttl.insert(0, "3600")
+        self.edr_dns_ttl.pack(side=tk.LEFT)
         ttk.Label(row2, text="+Extra hosts (comma):").pack(side=tk.LEFT, padx=6)
         self.edr_allow_extra = tk.Entry(row2, width=28)
         self.edr_allow_extra.pack(side=tk.LEFT)
@@ -312,6 +322,19 @@ class PCSuiteGUI(tk.Tk):
                     args += ["--preset", "microsoft-basic"]
                 if self.preset_m365.get():
                     args += ["--preset", "m365-core"]
+                if self.preset_teams.get():
+                    args += ["--preset", "teams"]
+                if self.preset_oned.get():
+                    args += ["--preset", "onedrive"]
+                if self.preset_edge.get():
+                    args += ["--preset", "edge-update"]
+                ttl = (self.edr_dns_ttl.get() or "").strip()
+                try:
+                    if ttl:
+                        float(ttl)
+                        args += ["--dns-ttl", ttl]
+                except Exception:
+                    pass
                 extra = (self.edr_allow_extra.get() or "").strip()
                 if extra:
                     for h in [x.strip() for x in extra.split(",") if x.strip()]:
@@ -365,6 +388,13 @@ class PCSuiteGUI(tk.Tk):
         args = ["edr", "allowlist"]
         for p in presets:
             args += ["--preset", p]
+        ttl = (self.edr_dns_ttl.get() or "").strip()
+        try:
+            if ttl:
+                float(ttl)
+                args += ["--dns-ttl", ttl]
+        except Exception:
+            pass
         if extra:
             for h in [x.strip() for x in extra.split(",") if x.strip()]:
                 args += ["--allow-host", h]

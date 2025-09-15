@@ -121,5 +121,12 @@ def evaluate_events(events: List[Dict[str, Any]], rules: List[Dict[str, Any]]) -
                 if first is None:
                     first = e
         if count:
-            matches.append({"rule": str(title), "count": count, "sample": first or {}})
+            matches.append({
+                "rule": str(title),
+                "count": count,
+                "sample": first or {},
+                "severity": r.get("severity"),
+                "action": r.get("action"),
+                "path": r.get("__path"),
+            })
     return matches

@@ -1,9 +1,11 @@
-import json
+import json, os, sys
 import typer
+from pathlib import Path
 from rich.console import Console
 from rich.table import Table
 
 from pcsuite.security import edr
+from pcsuite.core import shell
 
 
 app = typer.Typer(help="EDR prototype: status, isolation, triage, scans")
@@ -28,9 +30,10 @@ def isolate(
     dry_run: bool = typer.Option(True, help="Simulate; no changes"),
     block_outbound: bool = typer.Option(False, help="Also block outbound by policy with allowlist"),
     allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Host/IP to allow when blocking outbound (repeatable)"),
-    preset: list[str] = typer.Option(None, "--preset", help="Allowlist presets: ntp, winupdate, microsoft-basic, minimal (repeatable)"),
+    preset: list[str] = typer.Option(None, "--preset", help="Presets: ntp, winupdate, microsoft-basic, m365-core, teams, onedrive, edge-update, minimal (repeatable)"),
+    dns_ttl: float = typer.Option(None, help="DNS cache TTL (seconds) for resolving"),
 ):
-    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [], presets=preset or [])
+    res = edr.isolate(enable=enable, dry_run=dry_run, block_outbound=block_outbound, allow_hosts=allow_host or [], presets=preset or [], dns_ttl=dns_ttl)
     if res.get("ok") and res.get("dry_run"):
         console.print("[yellow]Dry-run[/]: firewall state change planned")
     elif res.get("ok"):
@@ -68,10 +71,11 @@ def list_ports(limit: int = typer.Option(100, help="Max entries to show")):
 @app.command("allowlist")
 def allowlist(
     allow_host: list[str] = typer.Option(None, "--allow-host", "-a", help="Extra host/IP to include (repeatable)"),
-    preset: list[str] = typer.Option(None, "--preset", help="Presets to include: ntp, winupdate, microsoft-basic, m365-core, minimal (repeatable)"),
+    preset: list[str] = typer.Option(None, "--preset", help="Presets to include: ntp, winupdate, microsoft-basic, m365-core, teams, onedrive, edge-update, minimal (repeatable)"),
+    dns_ttl: float = typer.Option(None, help="DNS cache TTL (seconds) for resolving"),
 ):
     """Resolve allowlist to IPs (no changes)."""
-    res = edr.resolve_allowlist(allow_hosts=allow_host or [], presets=preset or [])
+    res = edr.resolve_allowlist(allow_hosts=allow_host or [], presets=preset or [], dns_ttl=dns_ttl)
     console.print_json(json.dumps(res))
 
 
@@ -161,6 +165,19 @@ def agent_configure(
     rules: str = typer.Option(None, help="Rules file or directory (default: built-in sample rules)"),
     interval: float = typer.Option(2.0, help="Poll interval in seconds"),
     sources: str = typer.Option("security,powershell", help="Comma list of sources"),
+    # Auto-response
+    auto_response: bool = typer.Option(False, help="Enable auto-response on critical/actions"),
+    isolate_block_out: bool = typer.Option(True, help="Auto-response isolation blocks outbound"),
+    isolate_preset: list[str] = typer.Option(None, "--isolate-preset", help="Isolation presets (repeatable)"),
+    isolate_extra: list[str] = typer.Option(None, "--isolate-extra", help="Isolation extra hosts (repeatable)"),
+    isolate_dry_run: bool = typer.Option(True, help="Isolation dry-run when auto-response"),
+    isolate_dns_ttl: float = typer.Option(3600.0, help="DNS TTL for isolation allowlist (sec)"),
+    # HTTP sink & heartbeat
+    sink_url: str = typer.Option(None, help="HTTP sink URL to POST alerts/heartbeats"),
+    sink_token: str = typer.Option(None, help="Bearer token for HTTP sink (optional)"),
+    sink_verify: bool = typer.Option(True, help="Verify TLS"),
+    sink_timeout: float = typer.Option(3.0, help="HTTP timeout (sec)"),
+    heartbeat_interval: float = typer.Option(300.0, help="Heartbeat interval seconds (0 to disable)"),
 ):
     """Write agent config to ProgramData (agent.yml)."""
     import yaml
@@ -170,6 +187,23 @@ def agent_configure(
         "rules": rules,
         "interval": float(interval),
         "sources": [s.strip() for s in (sources or "").split(",") if s.strip()],
+        "auto_response": {
+            "enabled": bool(auto_response),
+            "isolate": {
+                "block_outbound": bool(isolate_block_out),
+                "presets": isolate_preset or [],
+                "extra_hosts": isolate_extra or [],
+                "dry_run": bool(isolate_dry_run),
+                "dns_ttl": float(isolate_dns_ttl),
+            },
+        },
+        "http_sink": {
+            "url": sink_url,
+            "token": sink_token,
+            "verify": bool(sink_verify),
+            "timeout": float(sink_timeout),
+        },
+        "heartbeat_interval": float(heartbeat_interval),
     }
     (base / "agent.yml").write_text(yaml.safe_dump(cfg), encoding="utf-8")
     console.print(f"[green]Wrote[/] {base / 'agent.yml'}")

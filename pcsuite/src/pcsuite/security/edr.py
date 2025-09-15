@@ -95,6 +95,20 @@ def _preset_hosts(names: list[str] | None) -> list[str]:
             "sls.update.microsoft.com",
         ],
         "minimal": ["time.windows.com"],
+        "teams": [
+            "teams.microsoft.com",
+            "statics.teams.cdn.office.net",
+            "presence.teams.live.com",
+        ],
+        "onedrive": [
+            "oneclient.sfx.ms",
+            "storage.live.com",
+            "oneclient.sfx.ms",
+        ],
+        "edge-update": [
+            "msedge.api.cdp.microsoft.com",
+            "edge.microsoft.com",
+        ],
     }
     out: list[str] = []
     for n in (names or []):
@@ -116,29 +130,40 @@ def isolate(
     block_outbound: bool = False,
     allow_hosts: list[str] | None = None,
     presets: list[str] | None = None,
+    dns_ttl: float | None = None,
 ) -> Dict[str, Any]:
     """High-level isolation toggle via firewall profiles.
 
     For now, map to fw.set_all_profiles(on/off) with dry-run default.
     In a future iteration, tighten outbound policy selectively.
     """
-    if not block_outbound:
-        res = fw.set_all_profiles(enable=enable, dry_run=dry_run)
-        return {"ok": res.get("ok", False), "dry_run": res.get("dry_run", dry_run), "detail": res}
-    # Block outbound mode with allowlist
-    if enable:
-        res1 = fw.set_firewall_policy(block_outbound=True, dry_run=dry_run)
-        hosts = (allow_hosts or []) + _preset_hosts(presets)
-        ips = _resolve_hosts(hosts)
-        res2 = fw.refresh_isolation_allowlist(ips, dry_run=dry_run)
-        ok = res1.get("ok", False) and res2.get("ok", False)
-        return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}
-    else:
-        # disable: restore default policy and remove group rules
-        res1 = fw.set_firewall_policy(block_outbound=False, dry_run=dry_run)
-        res2 = fw.refresh_isolation_allowlist([], dry_run=dry_run)
-        ok = res1.get("ok", False) and res2.get("ok", False)
-        return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}
+    # TTL override (temporarily)
+    old_ttl = None
+    if dns_ttl is not None:
+        global _DNS_TTL_SEC
+        old_ttl = _DNS_TTL_SEC
+        _DNS_TTL_SEC = float(max(0.0, dns_ttl))
+    try:
+        if not block_outbound:
+            res = fw.set_all_profiles(enable=enable, dry_run=dry_run)
+            return {"ok": res.get("ok", False), "dry_run": res.get("dry_run", dry_run), "detail": res}
+        # Block outbound mode with allowlist
+        if enable:
+            res1 = fw.set_firewall_policy(block_outbound=True, dry_run=dry_run)
+            hosts = (allow_hosts or []) + _preset_hosts(presets)
+            ips = _resolve_hosts(hosts)
+            res2 = fw.refresh_isolation_allowlist(ips, dry_run=dry_run)
+            ok = res1.get("ok", False) and res2.get("ok", False)
+            return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}
+        else:
+            # disable: restore default policy and remove group rules
+            res1 = fw.set_firewall_policy(block_outbound=False, dry_run=dry_run)
+            res2 = fw.refresh_isolation_allowlist([], dry_run=dry_run)
+            ok = res1.get("ok", False) and res2.get("ok", False)
+            return {"ok": ok, "dry_run": dry_run, "detail": {"policy": res1, "allowlist": res2}}
+    finally:
+        if old_ttl is not None:
+            _DNS_TTL_SEC = old_ttl
 
 
 def list_listening_ports(limit: int = 100) -> List[Dict[str, Any]]:
@@ -201,7 +226,16 @@ def quarantine_file(path: str, dry_run: bool = True) -> Dict[str, Any]:
     return corefs.quarantine_paths([path], dry_run=dry_run)
 
 
-def resolve_allowlist(allow_hosts: list[str] | None = None, presets: list[str] | None = None) -> Dict[str, Any]:
+def resolve_allowlist(allow_hosts: list[str] | None = None, presets: list[str] | None = None, dns_ttl: float | None = None) -> Dict[str, Any]:
     hosts = (allow_hosts or []) + _preset_hosts(presets)
-    ips = _resolve_hosts(hosts)
+    old_ttl = None
+    if dns_ttl is not None:
+        global _DNS_TTL_SEC
+        old_ttl = _DNS_TTL_SEC
+        _DNS_TTL_SEC = float(max(0.0, dns_ttl))
+    try:
+        ips = _resolve_hosts(hosts)
+    finally:
+        if old_ttl is not None:
+            _DNS_TTL_SEC = old_ttl
     return {"hosts": hosts, "ips": ips}

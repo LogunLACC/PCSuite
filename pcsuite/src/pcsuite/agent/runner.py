@@ -7,6 +7,10 @@ from typing import List
 
 from pcsuite.security import logs as seclogs
 from pcsuite.security import rules as secrules
+from pcsuite.security import edr as edrsec
+import json
+import platform
+from urllib import request as urlreq, error as urlerr
 
 
 DEFAULT_INTERVAL = 2.0
@@ -34,7 +38,8 @@ def _write_lines(lines: List[str]) -> None:
 
 
 class Agent:
-    def __init__(self, rules_path: str | None = None, interval: float = DEFAULT_INTERVAL, sources: List[str] | None = None):
+    def __init__(self, rules_path: str | None = None, interval: float = DEFAULT_INTERVAL, sources: List[str] | None = None,
+                 http_sink: dict | None = None, heartbeat_interval: float | None = None, auto_response: dict | None = None):
         self.rules_path = rules_path or DEFAULT_RULES
         self.interval = float(interval or DEFAULT_INTERVAL)
         s = sources or list(DEFAULT_SOURCES)
@@ -42,6 +47,10 @@ class Agent:
         self._stop = threading.Event()
         self._last = {"security": 0, "powershell": 0}
         self._rules = secrules.load_rules(self.rules_path)
+        self.http_sink = http_sink or {}
+        self.hb_interval = float(heartbeat_interval or 0)
+        self._last_hb = 0.0
+        self.auto_response = auto_response or {"enabled": False}
 
     def run_once(self) -> None:
         evs = []
@@ -57,6 +66,8 @@ class Agent:
         if matches:
             lines = [f"match: {m.get('rule')} count={m.get('count')}" for m in matches]
             _write_lines(lines)
+            self._send_alerts(matches)
+            self._maybe_respond(matches)
 
     def run_forever(self) -> None:
         _write_lines([f"Agent starting (rules={self.rules_path}, sources={','.join(sorted(self.sources))}, interval={self.interval})"])
@@ -66,6 +77,13 @@ class Agent:
                     self.run_once()
                 except Exception as e:
                     _write_lines([f"error: {e}"])
+                # Heartbeat
+                now = time.time()
+                if self.hb_interval and (now - self._last_hb) >= self.hb_interval:
+                    try:
+                        self._send_heartbeat()
+                    finally:
+                        self._last_hb = now
                 self._stop.wait(self.interval if self.interval > 0.2 else 0.2)
         finally:
             _write_lines(["Agent stopping"])
@@ -77,3 +95,71 @@ class Agent:
 def run_agent(rules_path: str | None = None, interval: float = DEFAULT_INTERVAL, sources: List[str] | None = None):
     Agent(rules_path=rules_path, interval=interval, sources=sources).run_forever()
 
+    # Helper methods
+    
+    def _sink_enabled(self) -> bool:
+        return bool(self.http_sink.get("url"))
+
+    def _post_json(self, payload: dict) -> None:
+        if not self._sink_enabled():
+            return
+        url = self.http_sink.get("url")
+        token = self.http_sink.get("token")
+        verify = self.http_sink.get("verify", True)
+        timeout = float(self.http_sink.get("timeout", 3))
+        data = json.dumps(payload).encode("utf-8")
+        req = urlreq.Request(url, data=data, headers={"Content-Type": "application/json"})
+        if token:
+            req.add_header("Authorization", f"Bearer {token}")
+        try:
+            # urllib does not handle verify flag directly; rely on OS certs unless custom context is needed.
+            urlreq.urlopen(req, timeout=timeout)
+        except urlerr.URLError as e:
+            _write_lines([f"sink error: {e}"])
+
+    def _send_alerts(self, matches: list[dict]) -> None:
+        if not matches:
+            return
+        payload = {
+            "type": "alerts",
+            "host": platform.node(),
+            "os": platform.platform(),
+            "matches": matches,
+            "ts": time.time(),
+        }
+        self._post_json(payload)
+
+    def _send_heartbeat(self) -> None:
+        payload = {
+            "type": "heartbeat",
+            "host": platform.node(),
+            "os": platform.platform(),
+            "ts": time.time(),
+        }
+        self._post_json(payload)
+
+    def _maybe_respond(self, matches: list[dict]) -> None:
+        cfg = self.auto_response or {}
+        if not cfg.get("enabled"):
+            return
+        do_isolate = False
+        for m in matches:
+            sev = str(m.get("severity") or "").lower()
+            act = str(m.get("action") or "").lower()
+            if act == "isolate" or sev in ("critical", "high"):
+                do_isolate = True; break
+        if not do_isolate:
+            return
+        iso = cfg.get("isolate") or {}
+        try:
+            edrsec.isolate(
+                enable=True,
+                dry_run=bool(iso.get("dry_run", True)),
+                block_outbound=bool(iso.get("block_outbound", True)),
+                allow_hosts=iso.get("extra_hosts") or [],
+                presets=iso.get("presets") or [],
+                dns_ttl=float(iso.get("dns_ttl", 3600.0)),
+            )
+            _write_lines(["auto-response: isolation triggered"])
+        except Exception as e:
+            _write_lines([f"auto-response error: {e}"])
